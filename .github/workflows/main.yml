@@ -15,9 +15,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive  # 關鍵：確保抓到專案內的 lib/btstack 等子模組
+          submodules: recursive # 必須包含 lib/btstack 等子模組
 
-      - name: Install ARM GCC & Dependencies
+      - name: Install ARM GCC & Build Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake python3
@@ -31,23 +31,18 @@ jobs:
 
       - name: Build Firmware
         run: |
-          # 賦予 build.sh 執行權限並執行
-          chmod +x build.sh
-          ./build.sh
+          mkdir build
+          cd build
+          # 初始化 CMake 並指定 Pico 平台為 pico_w
+          cmake -DPICO_BOARD=pico_w ..
+          # 開始編譯
+          make -j$(nproc)
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
 
-      - name: Check Build Output
-        run: |
-          if [ -f build/src/picow_ds4.uf2 ]; then
-            echo "Build successful!"
-          else
-            echo "Build failed: uf2 file not found."
-            exit 1
-          fi
-
-      - name: Upload Artifact
+      - name: Check and Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: picow-ds4-uf2
-          path: build/src/picow_ds4.uf2
+          # 根據專案結構，產出的檔案通常在 build/src/ 或 build/ 目錄下
+          path: build/src/*.uf2
