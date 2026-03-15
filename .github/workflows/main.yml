@@ -17,24 +17,21 @@ jobs:
 
       - name: Setup MicroPython and Modules
         run: |
-          # 1. 下載 MicroPython 與 SDK (使用 --depth 1 加速)
           git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
           git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $GITHUB_WORKSPACE/pico-sdk
           
-          # 2. 初始化子模組
           cd $GITHUB_WORKSPACE/micropython
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
           
-          # 3. 【核心修正】直接下載模組檔案到固定位置，不依賴 checkout
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           cd $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           
-          # 直接從 GitHub 抓取原作者的兩個關鍵檔案
-          curl -O https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/master/src/ds4.c
-          curl -O https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/master/src/micropython.cmake
+          # 直接使用正確的 Raw 連結下載 (修正為 main 分支)
+          curl -L -O https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/main/src/ds4.c
+          curl -L -O https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/main/src/micropython.cmake
           
-          # 檢查檔案是否成功下載
-          ls -l
+          # 檢查檔案內容，防止 404
+          if grep -q "404" micropython.cmake; then echo "Download Failed!"; exit 1; fi
 
       - name: Build mpy-cross
         run: |
@@ -42,17 +39,13 @@ jobs:
 
       - name: Build Firmware
         run: |
-          # 設定編譯環境變數
           export PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           
-          # 執行子模組編譯準備
           make BOARD=RPI_PICO_W submodules
+          # USER_C_MODULES 指向包含 .cmake 的目錄
+          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           
-          # 正式編譯，直接指向剛剛下載檔案的目錄
-          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/micropython.cmake
-          
-          # 產出物搬移
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
 
       - name: Upload Artifact
