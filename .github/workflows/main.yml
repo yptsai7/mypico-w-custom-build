@@ -22,25 +22,29 @@ jobs:
 
       - name: Setup MicroPython
         run: |
-          # 下載 MicroPython 與 SDK
+          # 下載 MicroPython 與 Pico SDK
           git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
           git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $GITHUB_WORKSPACE/pico-sdk
           
-          # 初始化子模組 (這步很重要，包含藍牙驅動)
+          # 初始化子模組 (包含關鍵的藍牙堆疊 BTstack 與 Wi-Fi 驅動)
           cd $GITHUB_WORKSPACE/micropython
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
 
-      - name: Inject Modules from Local
+      - name: Inject DS4 Module from Local
         run: |
-          # 將你專案中的 ds4 模組搬進 MicroPython 編譯樹
+          # 建立 MicroPython 內部的模組目錄
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
+          
+          # 從你自己的 Repo 複製 C 模組檔案到編譯路徑
+          # 預期路徑：my_project/external_modules/ds4/
           cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
           
-          # 檢查檔案是否搬移成功
-          ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
+          # 驗證檔案是否存在，若不存在則中斷避免後續無謂的編譯過程
+          ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/micropython.cmake
 
       - name: Build mpy-cross
         run: |
+          # 編譯 MicroPython 的字節碼編譯器
           make -C $GITHUB_WORKSPACE/micropython/mpy-cross
 
       - name: Build Firmware
@@ -48,12 +52,14 @@ jobs:
           export PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           
-          # 編譯前的最後準備
+          # 1. 準備子模組 (mbedtls, lwip 等)
           make BOARD=RPI_PICO_W submodules
           
-          # 正式編譯
+          # 2. 正式編譯
+          # USER_C_MODULES 必須指向「包含 micropython.cmake 的目錄」
           make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           
+          # 3. 將產出的 .uf2 檔案搬移到根目錄以便上傳
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
 
       - name: Upload Artifact
