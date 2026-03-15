@@ -13,6 +13,7 @@ jobs:
       - name: Checkout DS4 Module
         uses: actions/checkout@v4
         with:
+          # 將目前的專案 code 放在 picow-dualshock4 資料夾內
           path: picow-dualshock4
           submodules: recursive
 
@@ -29,27 +30,28 @@ jobs:
           echo "PICO_SDK_PATH=$HOME/pico-sdk" >> $GITHUB_ENV
 
       - name: Clone MicroPython
-# 我們需要 MicroPython 原始碼來包含這個模組
         run: |
+          # 下載 MicroPython 主程式碼
           git clone --depth 1 https://github.com/micropython/micropython.git $HOME/micropython
           cd $HOME/micropython
-          git submodule update --init lib/pico-sdk lib/tinyusb
+          # 初始化必要的子模組
+          git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack
 
-      - name: Build MicroPython Cross-Compiler
+      - name: Build MicroPython Cross-Compiler (mpy-cross)
         run: |
           make -C $HOME/micropython/mpy-cross
 
       - name: Build Firmware with DS4 Module
         run: |
-          # 進入 Pico W 的編譯目錄
+          # 進入樹莓派 RP2 平台的編譯目錄
           cd $HOME/micropython/ports/rp2
           
-          # 編譯指令：使用 USER_C_MODULES 引入下載好的 DS4 模組
-          # 注意：模組路徑必須指向 picow-dualshock4 裡的 src 或特定的 micropython.cmake 路徑
-          make BOARD=PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/picow-dualshock4/src/micropython.cmake
+          # 修正 BOARD 名稱為 RPI_PICO_W
+          # 使用 USER_C_MODULES 參數指向 DS4 模組的配置檔
+          make BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/picow-dualshock4/src/micropython.cmake
           
-          # 將產出的檔案複製回工作區以便上傳
-          cp build-PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
+          # 將產出的 .uf2 複製到根目錄以便後續上傳
+          cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
 
