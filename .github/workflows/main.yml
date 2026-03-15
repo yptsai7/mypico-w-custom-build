@@ -3,8 +3,6 @@ name: Build PicoW DS4 Firmware
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -12,12 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout DS4 Module
         uses: actions/checkout@v4
         with:
-          submodules: recursive # 必須包含 lib/btstack 等子模組
+          path: picow-dualshock4
+          submodules: recursive
 
-      - name: Install ARM GCC & Build Tools
+      - name: Install ARM GCC & Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake python3
@@ -29,20 +28,33 @@ jobs:
           git submodule update --init
           echo "PICO_SDK_PATH=$HOME/pico-sdk" >> $GITHUB_ENV
 
-      - name: Build Firmware
+      - name: Clone MicroPython
+# 我們需要 MicroPython 原始碼來包含這個模組
         run: |
-          mkdir build
-          cd build
-          # 初始化 CMake 並指定 Pico 平台為 pico_w
-          cmake -DPICO_BOARD=pico_w ..
-          # 開始編譯
-          make -j$(nproc)
+          git clone --depth 1 https://github.com/micropython/micropython.git $HOME/micropython
+          cd $HOME/micropython
+          git submodule update --init lib/pico-sdk lib/tinyusb
+
+      - name: Build MicroPython Cross-Compiler
+        run: |
+          make -C $HOME/micropython/mpy-cross
+
+      - name: Build Firmware with DS4 Module
+        run: |
+          # 進入 Pico W 的編譯目錄
+          cd $HOME/micropython/ports/rp2
+          
+          # 編譯指令：使用 USER_C_MODULES 引入下載好的 DS4 模組
+          # 注意：模組路徑必須指向 picow-dualshock4 裡的 src 或特定的 micropython.cmake 路徑
+          make BOARD=PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/picow-dualshock4/src/micropython.cmake
+          
+          # 將產出的檔案複製回工作區以便上傳
+          cp build-PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
 
-      - name: Check and Upload Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: picow-ds4-uf2
-          # 根據專案結構，產出的檔案通常在 build/src/ 或 build/ 目錄下
-          path: build/src/*.uf2
+          name: picow-ds4-firmware
+          path: picow_ds4.uf2
