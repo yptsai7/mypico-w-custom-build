@@ -31,7 +31,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/micropython/micropython.git $HOME/micropython
           cd $HOME/micropython
-          # 確保所有 Pico W 必要的組件都到位
+          # 確保 Pico W 必要的組件都到位
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip
 
       - name: Build MicroPython Cross-Compiler
@@ -40,16 +40,24 @@ jobs:
 
       - name: Build Firmware with DS4 Module
         run: |
-          # 【關鍵步驟】將你的模組原始碼直接複製到 MicroPython 目錄內
-          # 這樣可以徹底避免路徑找不到的問題
-          cp -r $GITHUB_WORKSPACE/src $HOME/micropython/ports/rp2/ds4_mod
+          # 1. 自動尋找 micropython.cmake 的絕對路徑
+          MOD_PATH=$(find $GITHUB_WORKSPACE -name "micropython.cmake" | head -n 1)
           
+          if [ -z "$MOD_PATH" ]; then
+            echo "Error: Cannot find micropython.cmake in the repository!"
+            ls -R $GITHUB_WORKSPACE
+            exit 1
+          fi
+          
+          echo "Found module at: $MOD_PATH"
+          
+          # 2. 進入 MicroPython rp2 編譯目錄
           cd $HOME/micropython/ports/rp2
           
-          # 使用相對路徑指向剛剛複製進去的 micropython.cmake
-          make BOARD=RPI_PICO_W USER_C_MODULES=ds4_mod/micropython.cmake
+          # 3. 執行編譯，直接使用找到的絕對路徑
+          make BOARD=RPI_PICO_W USER_C_MODULES=$MOD_PATH
           
-          # 複製產出的韌體
+          # 4. 複製產出的韌體到工作區
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
