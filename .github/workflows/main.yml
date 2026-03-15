@@ -21,7 +21,6 @@ jobs:
       - name: Setup Pico SDK
         run: |
           git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $GITHUB_WORKSPACE/pico-sdk
-          # 設定 SDK 路徑
           echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
 
       - name: Clone MicroPython
@@ -32,7 +31,7 @@ jobs:
 
       - name: Clone DS4 Module
         run: |
-          # 強制將模組下載到 MicroPython 目錄內部的一個固定位置
+          # 下載模組到 micropython 目錄內
           git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git $GITHUB_WORKSPACE/micropython/ds4_mod
 
       - name: Build MicroPython Cross-Compiler
@@ -41,16 +40,21 @@ jobs:
 
       - name: Build Firmware
         run: |
-          # 進入 rp2 port 目錄
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           
-          # 確認檔案真的在那裡 (除錯用)
-          ls -l ../../ds4_mod/src/micropython.cmake
+          # 【修正關鍵】確認檔案位置並執行
+          # 根據原專案結構，micropython.cmake 位於根目錄
+          if [ -f "../../ds4_mod/micropython.cmake" ]; then
+            echo "Found cmake file in root."
+            TARGET_PATH="../../ds4_mod/micropython.cmake"
+          else
+            echo "Searching for micropython.cmake..."
+            TARGET_PATH=$(find ../../ds4_mod -name "micropython.cmake")
+          fi
           
-          # 使用相對路徑，這次路徑更短更單純
-          make BOARD=RPI_PICO_W USER_C_MODULES=../../ds4_mod/src/micropython.cmake
+          echo "Final path: $TARGET_PATH"
+          make BOARD=RPI_PICO_W USER_C_MODULES=$TARGET_PATH
           
-          # 搬運產出物
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
