@@ -24,13 +24,16 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
           cd $GITHUB_WORKSPACE/micropython
-          # 初始化必要的子模組
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
 
-      - name: Clone DS4 Module Source
+      - name: Inject DS4 Module
         run: |
-          # 下載手把模組原始碼
-          git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git $GITHUB_WORKSPACE/micropython/ds4_mod
+          # 1. 下載模組到臨時目錄
+          git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git $HOME/temp_ds4
+          
+          # 2. 強行將 src 內容複製到 MicroPython 的用戶模組預設路徑下
+          mkdir -p $GITHUB_WORKSPACE/micropython/examples/usercmodule/ds4
+          cp -r $HOME/temp_ds4/src/* $GITHUB_WORKSPACE/micropython/examples/usercmodule/ds4/
 
       - name: Build mpy-cross
         run: |
@@ -40,12 +43,12 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           
-          # 1. 執行 submodules 初始化 (解決 micropython-lib 報錯)
+          # 先初始化子模組 (這步會跑比較久，請耐心等候)
           make BOARD=RPI_PICO_W submodules
           
-          # 2. 正式編譯
-          # 根據專案結構，micropython.cmake 在 src 目錄下
-          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ds4_mod/src/micropython.cmake
+          # 使用「相對路徑」指向剛剛注入的目錄，這對 CMake 來說是最穩定的路徑
+          # 因為我們在 ports/rp2，所以 ../../examples/usercmodule/ds4/micropython.cmake 一定存在
+          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=../../examples/usercmodule/ds4/micropython.cmake
           
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
