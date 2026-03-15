@@ -28,11 +28,8 @@ jobs:
 
       - name: Setup DS4 Module
         run: |
-          # 將模組下載到一個完全獨立的目錄
+          # 下載到與 micropython 同層的目錄
           git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git $HOME/ds4_mod
-          
-          # 檢查檔案是否真的存在，並印出絕對路徑 (Debug)
-          realpath $HOME/ds4_mod/src/micropython.cmake
 
       - name: Build mpy-cross
         run: |
@@ -40,13 +37,15 @@ jobs:
 
       - name: Build Firmware
         run: |
+          # 進入 rp2 port
           cd $HOME/micropython/ports/rp2
           
           # 初始化子模組
           make BOARD=RPI_PICO_W submodules
           
-          # 使用絕對路徑，並且直接指向包含 micropython.cmake 的目錄
-          # MicroPython 的編譯系統會自動在該目錄找 micropython.cmake
+          # 【關鍵修正】
+          # 1. USER_C_MODULES 指向「包含 micropython.cmake 的目錄」而非檔案本身
+          # 2. 使用 $HOME 變數確保路徑展開正確
           make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$HOME/ds4_mod/src
           
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
