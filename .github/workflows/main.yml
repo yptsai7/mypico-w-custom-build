@@ -22,33 +22,32 @@ jobs:
 
       - name: Clone MicroPython
         run: |
-          git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
-          cd $GITHUB_WORKSPACE/micropython
+          git clone --depth 1 https://github.com/micropython/micropython.git $HOME/micropython
+          cd $HOME/micropython
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
 
-      - name: Inject DS4 Module
+      - name: Setup DS4 Module
         run: |
-          # 1. 下載模組到臨時目錄
-          git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git $HOME/temp_ds4
+          # 將模組下載到一個完全獨立的目錄
+          git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git $HOME/ds4_mod
           
-          # 2. 強行將 src 內容複製到 MicroPython 的用戶模組預設路徑下
-          mkdir -p $GITHUB_WORKSPACE/micropython/examples/usercmodule/ds4
-          cp -r $HOME/temp_ds4/src/* $GITHUB_WORKSPACE/micropython/examples/usercmodule/ds4/
+          # 檢查檔案是否真的存在，並印出絕對路徑 (Debug)
+          realpath $HOME/ds4_mod/src/micropython.cmake
 
       - name: Build mpy-cross
         run: |
-          make -C $GITHUB_WORKSPACE/micropython/mpy-cross
+          make -C $HOME/micropython/mpy-cross
 
       - name: Build Firmware
         run: |
-          cd $GITHUB_WORKSPACE/micropython/ports/rp2
+          cd $HOME/micropython/ports/rp2
           
-          # 先初始化子模組 (這步會跑比較久，請耐心等候)
+          # 初始化子模組
           make BOARD=RPI_PICO_W submodules
           
-          # 使用「相對路徑」指向剛剛注入的目錄，這對 CMake 來說是最穩定的路徑
-          # 因為我們在 ports/rp2，所以 ../../examples/usercmodule/ds4/micropython.cmake 一定存在
-          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=../../examples/usercmodule/ds4/micropython.cmake
+          # 使用絕對路徑，並且直接指向包含 micropython.cmake 的目錄
+          # MicroPython 的編譯系統會自動在該目錄找 micropython.cmake
+          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$HOME/ds4_mod/src
           
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
