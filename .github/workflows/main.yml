@@ -36,7 +36,7 @@ jobs:
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
           
-          # 檢查檔案
+          # 檢查檔案是否存在
           ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
       - name: Build mpy-cross
@@ -48,16 +48,16 @@ jobs:
           export PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           
-          # 準備子模組
+          # 1. 準備子模組
           make BOARD=RPI_PICO_W submodules
           
-          # 正式編譯
-          # 加入 CFLAGS_EXTRA="-Wno-error" 確保不會因為 Warning 而編譯失敗
+          # 2. 正式編譯
+          # 重點：加入開啟 L2CAP 通道的定義 (DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1)
           make -j$(nproc) BOARD=RPI_PICO_W \
             USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext \
-            CFLAGS_EXTRA="-Wno-error"
+            CFLAGS_EXTRA="-Wno-error -DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1"
           
-          # 複製產出的韌體
+          # 3. 複製產出的韌體
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
 
       - name: Upload Artifact
