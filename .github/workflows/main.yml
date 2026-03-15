@@ -13,7 +13,6 @@ jobs:
       - name: Checkout DS4 Module
         uses: actions/checkout@v4
         with:
-          # 直接放在根目錄，簡化路徑處理
           submodules: recursive
 
       - name: Install ARM GCC & Dependencies
@@ -32,7 +31,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/micropython/micropython.git $HOME/micropython
           cd $HOME/micropython
-          # 補全 Pico W 編譯必須的子模組
+          # 確保所有 Pico W 必要的組件都到位
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip
 
       - name: Build MicroPython Cross-Compiler
@@ -41,12 +40,16 @@ jobs:
 
       - name: Build Firmware with DS4 Module
         run: |
+          # 【關鍵步驟】將你的模組原始碼直接複製到 MicroPython 目錄內
+          # 這樣可以徹底避免路徑找不到的問題
+          cp -r $GITHUB_WORKSPACE/src $HOME/micropython/ports/rp2/ds4_mod
+          
           cd $HOME/micropython/ports/rp2
           
-          # 使用相對路徑來避免 $GITHUB_WORKSPACE 的路徑陷阱
-          # 指向你 repo 裡的 src/micropython.cmake
-          make BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/src/micropython.cmake
+          # 使用相對路徑指向剛剛複製進去的 micropython.cmake
+          make BOARD=RPI_PICO_W USER_C_MODULES=ds4_mod/micropython.cmake
           
+          # 複製產出的韌體
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
