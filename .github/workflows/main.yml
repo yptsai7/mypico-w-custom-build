@@ -13,8 +13,7 @@ jobs:
       - name: Checkout DS4 Module
         uses: actions/checkout@v4
         with:
-          # 將目前的專案 code 放在 picow-dualshock4 資料夾內
-          path: picow-dualshock4
+          # 直接放在根目錄，簡化路徑處理
           submodules: recursive
 
       - name: Install ARM GCC & Dependencies
@@ -29,28 +28,25 @@ jobs:
           git submodule update --init
           echo "PICO_SDK_PATH=$HOME/pico-sdk" >> $GITHUB_ENV
 
-      - name: Clone MicroPython
+      - name: Clone MicroPython & Setup Submodules
         run: |
-          # 下載 MicroPython 主程式碼
           git clone --depth 1 https://github.com/micropython/micropython.git $HOME/micropython
           cd $HOME/micropython
-          # 初始化必要的子模組
-          git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack
+          # 補全 Pico W 編譯必須的子模組
+          git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip
 
-      - name: Build MicroPython Cross-Compiler (mpy-cross)
+      - name: Build MicroPython Cross-Compiler
         run: |
           make -C $HOME/micropython/mpy-cross
 
       - name: Build Firmware with DS4 Module
         run: |
-          # 進入樹莓派 RP2 平台的編譯目錄
           cd $HOME/micropython/ports/rp2
           
-          # 修正 BOARD 名稱為 RPI_PICO_W
-          # 使用 USER_C_MODULES 參數指向 DS4 模組的配置檔
-          make BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/picow-dualshock4/src/micropython.cmake
+          # 使用相對路徑來避免 $GITHUB_WORKSPACE 的路徑陷阱
+          # 指向你 repo 裡的 src/micropython.cmake
+          make BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/src/micropython.cmake
           
-          # 將產出的 .uf2 複製到根目錄以便後續上傳
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
