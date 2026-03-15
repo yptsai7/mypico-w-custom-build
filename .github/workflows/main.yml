@@ -24,12 +24,12 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
           cd $GITHUB_WORKSPACE/micropython
-          # 初始化所有必要的子模組，包含最新的 micropython-lib
+          # 初始化必要的子模組
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
 
       - name: Clone DS4 Module Source
         run: |
-          # 直接把模組 clone 到 micropython 內部的範例資料夾下，這路徑最穩
+          # 下載手把模組原始碼
           git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git $GITHUB_WORKSPACE/micropython/ds4_mod
 
       - name: Build mpy-cross
@@ -44,8 +44,7 @@ jobs:
           make BOARD=RPI_PICO_W submodules
           
           # 2. 正式編譯
-          # USER_C_MODULES 指向我們剛剛下載的目錄
-          # 注意：目標是該目錄下的 src 資料夾 (包含 micropython.cmake)
+          # 根據專案結構，micropython.cmake 在 src 目錄下
           make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ds4_mod/src/micropython.cmake
           
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
@@ -53,7 +52,7 @@ jobs:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@@v4
+        uses: actions/upload-artifact@v4
         with:
           name: picow-ds4-firmware
           path: picow_ds4.uf2
