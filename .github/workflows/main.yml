@@ -10,49 +10,49 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout DS4 Source
-        uses: actions/checkout@v4
-        with:
-          repository: Akatsuki1910/picow-dualshock4
-          path: ds4_source
-
       - name: Install ARM GCC & Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake python3
 
-      - name: Setup Environment and Build
+      - name: Setup MicroPython and Modules
         run: |
-          # 1. 在 WORKSPACE 內設定目錄
-          export MP_DIR=$GITHUB_WORKSPACE/micropython
-          export SDK_DIR=$GITHUB_WORKSPACE/pico-sdk
+          # 1. 下載 MicroPython 與 SDK (使用 --depth 1 加速)
+          git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
+          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $GITHUB_WORKSPACE/pico-sdk
           
-          # 2. 下載 SDK 與 MicroPython
-          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $SDK_DIR
-          git clone --depth 1 https://github.com/micropython/micropython.git $MP_DIR
-          
-          # 3. 初始化子模組
-          cd $MP_DIR
+          # 2. 初始化子模組
+          cd $GITHUB_WORKSPACE/micropython
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
           
-          # 4. 建立內部模組目錄並複製 (同一區塊執行確保路徑一致)
-          mkdir -p $MP_DIR/ports/rp2/ds4_ext
-          cp -r $GITHUB_WORKSPACE/ds4_source/src/* $MP_DIR/ports/rp2/ds4_ext/
+          # 3. 【核心修正】直接下載模組檔案到固定位置，不依賴 checkout
+          mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
+          cd $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           
-          # 驗證搬移 (如果這步失敗會立刻中斷)
-          test -f $MP_DIR/ports/rp2/ds4_ext/micropython.cmake && echo "File exists!" || exit 1
+          # 直接從 GitHub 抓取原作者的兩個關鍵檔案
+          curl -O https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/master/src/ds4.c
+          curl -O https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/master/src/micropython.cmake
           
-          # 5. 編譯 mpy-cross
-          make -C $MP_DIR/mpy-cross
+          # 檢查檔案是否成功下載
+          ls -l
+
+      - name: Build mpy-cross
+        run: |
+          make -C $GITHUB_WORKSPACE/micropython/mpy-cross
+
+      - name: Build Firmware
+        run: |
+          # 設定編譯環境變數
+          export PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
+          cd $GITHUB_WORKSPACE/micropython/ports/rp2
           
-          # 6. 編譯 Firmware
-          cd $MP_DIR/ports/rp2
-          export PICO_SDK_PATH=$SDK_DIR
-          
+          # 執行子模組編譯準備
           make BOARD=RPI_PICO_W submodules
-          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$MP_DIR/ports/rp2/ds4_ext/micropython.cmake
           
-          # 7. 搬回產出物
+          # 正式編譯，直接指向剛剛下載檔案的目錄
+          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/micropython.cmake
+          
+          # 產出物搬移
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
 
       - name: Upload Artifact
