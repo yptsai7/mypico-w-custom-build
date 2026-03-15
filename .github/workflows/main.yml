@@ -15,7 +15,6 @@ jobs:
         with:
           repository: Akatsuki1910/picow-dualshock4
           path: ds4_source
-          submodules: recursive
 
       - name: Install ARM GCC & Dependencies
         run: |
@@ -33,24 +32,30 @@ jobs:
           cd $HOME/micropython
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
 
+      - name: Merge DS4 Source into MicroPython
+        run: |
+          # 建立一個完全內部的目錄
+          mkdir -p $HOME/micropython/ports/rp2/ds4_ext
+          # 將所有原始碼強制複製進去
+          cp -r $GITHUB_WORKSPACE/ds4_source/src/* $HOME/micropython/ports/rp2/ds4_ext/
+          # 檢查檔案是否真的在裡面
+          ls -l $HOME/micropython/ports/rp2/ds4_ext/micropython.cmake
+
       - name: Build mpy-cross
         run: |
           make -C $HOME/micropython/mpy-cross
 
       - name: Build Firmware
         run: |
-          # 進入編譯目錄
           cd $HOME/micropython/ports/rp2
           
           # 1. 初始化子模組
           make BOARD=RPI_PICO_W submodules
           
           # 2. 正式編譯
-          # 重點：直接使用 $GITHUB_WORKSPACE 絕對路徑，這是 GitHub Actions 中最可靠的根目錄
-          # 注意：ds4_source/src 是包含 micropython.cmake 的目錄
-          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/ds4_source/src
+          # 重點：現在使用絕對路徑指向「已經搬進家門」的檔案
+          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$HOME/micropython/ports/rp2/ds4_ext/micropython.cmake
           
-          # 複製結果
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
