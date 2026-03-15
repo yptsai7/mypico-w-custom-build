@@ -15,23 +15,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake python3
 
-      - name: Setup MicroPython and Modules
+      - name: Setup MicroPython
         run: |
           git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
           git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $GITHUB_WORKSPACE/pico-sdk
-          
           cd $GITHUB_WORKSPACE/micropython
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
-          
+
+      - name: Inject DS4 Module Source
+        run: |
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           cd $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           
-          # 直接使用正確的 Raw 連結下載 (修正為 main 分支)
-          curl -L -O https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/main/src/ds4.c
-          curl -L -O https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/main/src/micropython.cmake
+          # 這裡我們用 cat 直接寫入 micropython.cmake
+          cat <<EOF > micropython.cmake
+          # MicroPython DS4 Module
+          target_sources(usermod_rp2 INTERFACE \${CMAKE_CURRENT_LIST_DIR}/ds4.c)
+          target_include_directories(usermod_rp2 INTERFACE \${CMAKE_CURRENT_LIST_DIR})
+          EOF
+
+          # 這裡我們用 curl 抓取原始碼，如果抓不到就用最精簡的 Stub 填充防止編譯崩潰
+          # 但我們會先嘗試抓取正確的分支
+          curl -L https://raw.githubusercontent.com/Akatsuki1910/picow-dualshock4/main/src/ds4.c -o ds4.c
           
-          # 檢查檔案內容，防止 404
-          if grep -q "404" micropython.cmake; then echo "Download Failed!"; exit 1; fi
+          # 檢查 ds4.c 是否太小（如果是 404 網頁會很小）
+          FILESIZE=$(stat -c%s "ds4.c")
+          if [ $FILESIZE -lt 100 ]; then
+            echo "Error: ds4.c download failed, file too small."
+            exit 1
+          fi
 
       - name: Build mpy-cross
         run: |
@@ -41,9 +53,7 @@ jobs:
         run: |
           export PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
-          
           make BOARD=RPI_PICO_W submodules
-          # USER_C_MODULES 指向包含 .cmake 的目錄
           make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
