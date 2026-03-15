@@ -20,32 +20,33 @@ jobs:
 
       - name: Setup Pico SDK
         run: |
-          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $HOME/pico-sdk
-          cd $HOME/pico-sdk
-          git submodule update --init
-          echo "PICO_SDK_PATH=$HOME/pico-sdk" >> $GITHUB_ENV
+          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $GITHUB_WORKSPACE/pico-sdk
+          echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
 
       - name: Clone MicroPython & Setup Submodules
         run: |
-          git clone --depth 1 https://github.com/micropython/micropython.git $HOME/micropython
-          cd $HOME/micropython
+          cd $GITHUB_WORKSPACE
+          git clone --depth 1 https://github.com/micropython/micropython.git
+          cd micropython
           git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip
 
-      - name: Clone DS4 Module Source
+      - name: Clone DS4 Module
         run: |
-          # 直接從原作者倉庫抓取程式碼
-          git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git $HOME/ds4-module
+          cd $GITHUB_WORKSPACE
+          # 將模組直接下載到與 micropython 同層的目錄
+          git clone --recursive https://github.com/Akatsuki1910/picow-dualshock4.git ds4_mod
 
       - name: Build MicroPython Cross-Compiler
         run: |
-          make -C $HOME/micropython/mpy-cross
+          make -C $GITHUB_WORKSPACE/micropython/mpy-cross
 
       - name: Build Firmware with DS4 Module
         run: |
-          cd $HOME/micropython/ports/rp2
+          cd $GITHUB_WORKSPACE/micropython/ports/rp2
           
-          # 指定抓取下來的模組路徑
-          make BOARD=RPI_PICO_W USER_C_MODULES=$HOME/ds4-module/src/micropython.cmake
+          # 這裡使用相對路徑 ../../../ds4_mod/src/micropython.cmake
+          # 這樣 CMake 在編譯目錄下絕對找得到
+          make BOARD=RPI_PICO_W USER_C_MODULES=../../../ds4_mod/src/micropython.cmake
           
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
         env:
