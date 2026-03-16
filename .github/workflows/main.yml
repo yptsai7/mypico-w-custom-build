@@ -31,7 +31,7 @@ jobs:
       - name: Patch btstack_config.h
         run: |
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
-          # 移除衝突定義並注入 DS4 專用配置
+          # 徹底移除現有的 ENABLE_BLE 與 ENABLE_CLASSIC 防止衝突
           sed -i '/#define ENABLE_BLE/d' $BTSTACK_INC/btstack_config.h
           sed -i '/#define ENABLE_CLASSIC/d' $BTSTACK_INC/btstack_config.h
           {
@@ -46,12 +46,12 @@ jobs:
 
       - name: Inject DS4 Module
         run: |
-          # 建立母目錄結構
+          # 建立母目錄結構 external，並在其下建立 ds4 子目錄 (模組名)
           mkdir -p $GITHUB_WORKSPACE/external/ds4
-          # 自動搜尋並複製檔案，解決路徑找不到的問題
+          # 自動搜尋 checkout 下來的檔案並複製到指定位置
           find $GITHUB_WORKSPACE/my_project -name "ds4.c" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
           find $GITHUB_WORKSPACE/my_project -name "micropython.cmake" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
-          echo "=== 檢查目錄結構 ==="
+          echo "=== 檢查注入後的目錄結構 ==="
           ls -R $GITHUB_WORKSPACE/external
 
       - name: Build mpy-cross
@@ -61,7 +61,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           make BOARD=RPI_PICO_W submodules
-          # USER_C_MODULES 指向母目錄 external
+          # USER_C_MODULES 指向 external (母目錄)
           make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/external
 
       - name: Upload Artifact
