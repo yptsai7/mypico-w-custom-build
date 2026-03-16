@@ -42,61 +42,45 @@ jobs:
             lib/lwip \
             lib/micropython-lib
 
-          # 完整初始化 pico-sdk 所有子模組
           cd $GITHUB_WORKSPACE/micropython/lib/pico-sdk
           git submodule update --init --recursive
 
       - name: Patch btstack_config.h
         run: |
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
-          echo "=== 原始 btstack_config.h ==="
-          cat $BTSTACK_INC/btstack_config.h
+          # 關鍵修正：先移除可能導致重複定義的 ENABLE_BLE
+          sed -i '/#define ENABLE_BLE/d' $BTSTACK_INC/btstack_config.h
+          
+          # 插入必要的經典藍牙與 HID 支援
+          {
+            echo "#define ENABLE_CLASSIC"
+            echo "#define ENABLE_BTSTACK_CLASSIC_SUPPORT"
+            echo "#define ENABLE_HID_HOST"
+            echo "#define MAX_NR_HCI_CONNECTIONS 2"
+            echo "#define MAX_NR_HID_HOST_CONNECTIONS 2"
+          } > temp_config
+          cat $BTSTACK_INC/btstack_config.h >> temp_config
+          mv temp_config $BTSTACK_INC/btstack_config.h
 
-          printf '\n#ifndef ENABLE_CLASSIC\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#define ENABLE_CLASSIC 1\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#ifndef ENABLE_HID_HOST\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#define ENABLE_HID_HOST 1\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#ifndef NVM_NUM_LINK_KEYS\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#define NVM_NUM_LINK_KEYS 16\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#ifndef NVM_NUM_DEVICE_DB_ENTRIES\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#define NVM_NUM_DEVICE_DB_ENTRIES 16\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#ifndef MAX_NR_HID_HOST_CONNECTIONS\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#define MAX_NR_HID_HOST_CONNECTIONS 2\n' >> $BTSTACK_INC/btstack_config.h
-          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
-
-          echo "=== 修改後 btstack_config.h ==="
-          cat $BTSTACK_INC/btstack_config.h
-
-      - name: Inject DS4 Module from Local
+      - name: Inject DS4 Module
         run: |
-          mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
-          cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* \
-            $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
-          echo "=== ds4_ext 目錄內容 ==="
-          ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
+          mkdir -p $GITHUB_WORKSPACE/custom_mod
+          cp $GITHUB_WORKSPACE/my_project/ds4.c $GITHUB_WORKSPACE/custom_mod/
+          cp $GITHUB_WORKSPACE/my_project/micropython.cmake $GITHUB_WORKSPACE/custom_mod/
 
       - name: Build mpy-cross
-        run: |
-          make -C $GITHUB_WORKSPACE/micropython/mpy-cross
+        run: make -C $GITHUB_WORKSPACE/micropython/mpy-cross
 
       - name: Build Firmware
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
-
           make BOARD=RPI_PICO_W submodules
-
+          # 執行編譯，指定用戶模組路徑
           make -j$(nproc) BOARD=RPI_PICO_W \
-            USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/micropython.cmake \
-            CFLAGS_EXTRA="-Wno-error -DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1"
-
-          cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
+            USER_C_MODULES=$GITHUB_WORKSPACE/custom_mod
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: picow-ds4-firmware
-          path: picow_ds4.uf2
+          path: $GITHUB_WORKSPACE/micropython/ports/rp2/build-RPI_PICO_W/firmware.uf2
