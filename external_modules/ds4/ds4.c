@@ -28,10 +28,9 @@ static ds4_state_t ds4_state = {
 
 static uint16_t hid_host_cid = 0;
 
-// ======== 解析 DS4 HID 數據 ========
+// ======== 解析 DS4 數據包 ========
 static void handle_ds4_report(const uint8_t *packet, uint16_t size) {
     if (size < 10) return;
-    // DS4 標準 Report ID 0x01
     ds4_state.lx = packet[1];
     ds4_state.ly = packet[2];
     ds4_state.rx = packet[3];
@@ -40,6 +39,7 @@ static void handle_ds4_report(const uint8_t *packet, uint16_t size) {
     ds4_state.buttons = packet[5] | (packet[6] << 8);
     ds4_state.l2 = packet[8];
     ds4_state.r2 = packet[9];
+    ds4_state.connected = true;
 }
 
 // ======== BTstack 事件處理器 ========
@@ -56,12 +56,10 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 if (hid_subevent_connection_opened_get_status(packet) == 0) {
                     hid_host_cid = hid_subevent_connection_opened_get_hid_cid(packet);
                     ds4_state.connected = true;
-                    printf("DS4: 已連線 (CID 0x%02x)\n", hid_host_cid);
                 }
             } else if (subevent == HID_SUBEVENT_CONNECTION_CLOSED) {
                 hid_host_cid = 0;
                 ds4_state.connected = false;
-                printf("DS4: 連線中斷\n");
             }
         }
     } else if (packet_type == HID_DATA_PACKET) {
@@ -69,7 +67,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
     }
 }
 
-// ======== MicroPython 接口 ========
+// ======== MicroPython 介面 ========
 
 static mp_obj_t ds4_read_sticks(void) {
     mp_obj_t t[4] = {
