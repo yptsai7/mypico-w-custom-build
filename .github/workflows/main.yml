@@ -29,10 +29,9 @@ jobs:
       - name: Patch btstack_config.h
         run: |
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
-          # 徹底移除現有的 ENABLE_BLE 定義以防衝突
+          # 移除現有 ENABLE_BLE，避免 Redefined 錯誤
           sed -i '/#define ENABLE_BLE/d' $BTSTACK_INC/btstack_config.h
-          
-          # 插入必要的經典藍牙與 HID 支援
+          # 加入經典藍牙與 HID 支援
           {
             echo "#define ENABLE_CLASSIC"
             echo "#define ENABLE_BTSTACK_CLASSIC_SUPPORT"
@@ -45,12 +44,12 @@ jobs:
 
       - name: Inject DS4 Module
         run: |
-          mkdir -p $GITHUB_WORKSPACE/custom_mod
-          # 使用 find 自動尋找檔案路徑，解決 No such file 錯誤
-          find . -name "ds4.c" -exec cp {} $GITHUB_WORKSPACE/custom_mod/ \;
-          find . -name "micropython.cmake" -exec cp {} $GITHUB_WORKSPACE/custom_mod/ \;
-          echo "=== 注入後的檔案內容 ==="
-          ls -R $GITHUB_WORKSPACE/custom_mod
+          # 建立一個包含模組的目錄結構
+          mkdir -p $GITHUB_WORKSPACE/external/ds4_mod
+          find . -name "ds4.c" -exec cp {} $GITHUB_WORKSPACE/external/ds4_mod/ \;
+          find . -name "micropython.cmake" -exec cp {} $GITHUB_WORKSPACE/external/ds4_mod/ \;
+          echo "=== 檢查目錄結構 ==="
+          ls -R $GITHUB_WORKSPACE/external
 
       - name: Build mpy-cross
         run: make -C $GITHUB_WORKSPACE/micropython/mpy-cross
@@ -59,7 +58,8 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           make BOARD=RPI_PICO_W submodules
-          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/custom_mod
+          # 注意：USER_C_MODULES 指向包含 ds4_mod 的外部目錄
+          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/external
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
