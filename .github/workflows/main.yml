@@ -67,9 +67,9 @@ jobs:
           # 準備子模組
           make BOARD=RPI_PICO_W submodules
 
-          # 編譯
+          # 編譯（USER_C_MODULES 指向 .cmake 檔案，不是目錄）
           make -j$(nproc) BOARD=RPI_PICO_W \
-            USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext \
+            USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/micropython.cmake \
             CFLAGS_EXTRA="-Wno-error \
               -DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1 \
               -DBTSTACK_FILE__=__FILE__ \
