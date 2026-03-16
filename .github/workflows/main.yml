@@ -29,12 +29,10 @@ jobs:
 
       - name: Setup MicroPython
         run: |
-          # 鎖定已知相容的版本
           git clone --depth 1 --branch v1.24.1 \
             https://github.com/micropython/micropython.git \
             $GITHUB_WORKSPACE/micropython
 
-          # 用 MicroPython 內建的 pico-sdk（版本已配對好）
           cd $GITHUB_WORKSPACE/micropython
           git submodule update --init \
             lib/pico-sdk \
@@ -44,7 +42,6 @@ jobs:
             lib/lwip \
             lib/micropython-lib
 
-          # 初始化 pico-sdk 自己的子模組
           cd $GITHUB_WORKSPACE/micropython/lib/pico-sdk
           git submodule update --init
 
@@ -56,20 +53,15 @@ jobs:
           echo "=== ds4_ext 目錄內容 ==="
           ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
-          # 覆蓋 MicroPython 的 btstack_config.h，附加 Classic BT 支援
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
           echo "=== 原始 btstack_config.h ==="
           cat $BTSTACK_INC/btstack_config.h
 
-          cat >> $BTSTACK_INC/btstack_config.h << 'EOF'
-
-// === DS4 Classic BT 支援 ===
-#define ENABLE_CLASSIC 1
-#define ENABLE_HID_HOST 1
-#define NVM_NUM_LINK_KEYS 16
-#define NVM_NUM_DEVICE_DB_ENTRIES 16
-#define MAX_NR_HID_HOST_CONNECTIONS 2
-EOF
+          printf '\n#define ENABLE_CLASSIC 1\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define ENABLE_HID_HOST 1\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define NVM_NUM_LINK_KEYS 16\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define NVM_NUM_DEVICE_DB_ENTRIES 16\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define MAX_NR_HID_HOST_CONNECTIONS 2\n' >> $BTSTACK_INC/btstack_config.h
 
           echo "=== 修改後 btstack_config.h ==="
           cat $BTSTACK_INC/btstack_config.h
@@ -82,10 +74,8 @@ EOF
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
 
-          # 準備子模組
           make BOARD=RPI_PICO_W submodules
 
-          # 編譯
           make -j$(nproc) BOARD=RPI_PICO_W \
             USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/micropython.cmake \
             CFLAGS_EXTRA="-Wno-error -DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1"
