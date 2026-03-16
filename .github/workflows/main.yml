@@ -42,8 +42,9 @@ jobs:
             lib/lwip \
             lib/micropython-lib
 
+          # 完整初始化 pico-sdk 所有子模組（修復 boot/picobin.h 找不到）
           cd $GITHUB_WORKSPACE/micropython/lib/pico-sdk
-          git submodule update --init
+          git submodule update --init --recursive
 
       - name: Patch btstack_config.h
         run: |
