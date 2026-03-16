@@ -42,7 +42,7 @@ jobs:
             lib/lwip \
             lib/micropython-lib
 
-          # 完整初始化 pico-sdk 所有子模組（修復 boot/picobin.h 找不到）
+          # 完整初始化 pico-sdk 所有子模組
           cd $GITHUB_WORKSPACE/micropython/lib/pico-sdk
           git submodule update --init --recursive
 
@@ -52,11 +52,21 @@ jobs:
           echo "=== 原始 btstack_config.h ==="
           cat $BTSTACK_INC/btstack_config.h
 
-          printf '\n#define ENABLE_CLASSIC 1\n' >> $BTSTACK_INC/btstack_config.h
+          printf '\n#ifndef ENABLE_CLASSIC\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define ENABLE_CLASSIC 1\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#ifndef ENABLE_HID_HOST\n' >> $BTSTACK_INC/btstack_config.h
           printf '#define ENABLE_HID_HOST 1\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#ifndef NVM_NUM_LINK_KEYS\n' >> $BTSTACK_INC/btstack_config.h
           printf '#define NVM_NUM_LINK_KEYS 16\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#ifndef NVM_NUM_DEVICE_DB_ENTRIES\n' >> $BTSTACK_INC/btstack_config.h
           printf '#define NVM_NUM_DEVICE_DB_ENTRIES 16\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#ifndef MAX_NR_HID_HOST_CONNECTIONS\n' >> $BTSTACK_INC/btstack_config.h
           printf '#define MAX_NR_HID_HOST_CONNECTIONS 2\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
 
           echo "=== 修改後 btstack_config.h ==="
           cat $BTSTACK_INC/btstack_config.h
