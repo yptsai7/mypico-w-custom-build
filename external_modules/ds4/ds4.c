@@ -26,7 +26,7 @@ static ds4_state_t ds4_state = {
     .hat = 0x8, .connected = false
 };
 
-// ... (此處保留您原本的 BTstack 回調與邏輯函數，如 packet_handler 等) ...
+// ... 此處請保留您原本的 BTstack 回調 (packet_handler 等) 與邏輯 ...
 
 // ======== MicroPython 接口 ========
 
@@ -39,7 +39,7 @@ static mp_obj_t ds4_sticks(void) {
     };
     return mp_obj_new_tuple(4, t);
 }
-// 修正：不要在巨集前加 static，內部已處理
+// 修正：移除巨集前的 static，避免 QSTR 掃描失敗
 MP_DEFINE_CONST_FUN_OBJ_0(ds4_read_sticks_obj, ds4_sticks);
 
 static mp_obj_t ds4_triggers(void) {
