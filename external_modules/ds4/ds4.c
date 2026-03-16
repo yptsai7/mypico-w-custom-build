@@ -26,69 +26,57 @@ static ds4_state_t ds4_state = {
     .hat = 0x8, .connected = false
 };
 
-// ======== BTstack 變數 ========
-static btstack_packet_callback_registration_t hci_event_cb;
-static bd_addr_t remote_addr;
 static uint16_t hid_host_cid = 0;
 
-// 解析 DS4 HID 報表 (通常是 Report ID 0x01)
+// ======== DS4 HID 報表解析 ========
 static void handle_ds4_report(const uint8_t *packet, uint16_t size) {
-    if (size < 10) return; // 簡單長度檢查
+    // 典型的 DS4 HID 數據偏移量 (Report ID 0x01)
+    if (size < 10) return;
     
-    // DS4 典型偏移量 (根據標準 HID 報表描述符)
     ds4_state.lx = packet[1];
     ds4_state.ly = packet[2];
     ds4_state.rx = packet[3];
     ds4_state.ry = packet[4];
+    
+    // 按鈕與方向鍵 (Hat)
+    ds4_state.hat = packet[5] & 0x0F;
     ds4_state.buttons = packet[5] | (packet[6] << 8);
+    
+    // 板機 L2 / R2
     ds4_state.l2 = packet[8];
     ds4_state.r2 = packet[9];
-    ds4_state.hat = packet[5] & 0x0F;
 }
 
+// ======== 藍牙事件處理常式 ========
 static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
     UNUSED(channel);
     uint8_t event = hci_event_packet_get_type(packet);
 
-    switch (packet_type) {
-        case HCI_EVENT_PACKET:
-            switch (event) {
-                case BTSTACK_EVENT_STATE:
-                    if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
-                        printf("BTstack: 啟動中，開始搜尋 DS4...\n");
-                        gap_local_bd_addr(remote_addr); // 僅初始化
-                    }
-                    break;
-                case GAP_EVENT_ADVERTISING_REPORT:
-                    // 此處可加入自動配對邏輯
-                    break;
-                case HCI_EVENT_HID_META:
-                    switch (hci_event_hid_meta_get_subevent_code(packet)) {
-                        case HID_SUBEVENT_CONNECTION_OPENED:
-                            if (hid_subevent_connection_opened_get_status(packet) == 0) {
-                                hid_host_cid = hid_subevent_connection_opened_get_hid_cid(packet);
-                                ds4_state.connected = true;
-                                printf("DS4: 連線成功!\n");
-                            }
-                            break;
-                        case HID_SUBEVENT_CONNECTION_CLOSED:
-                            hid_host_cid = 0;
-                            ds4_state.connected = false;
-                            printf("DS4: 連線已中斷\n");
-                            break;
-                    }
-                    break;
+    if (packet_type == HCI_EVENT_PACKET) {
+        if (event == BTSTACK_EVENT_STATE && btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
+            printf("BTstack 已啟動，等待 DS4 連線...\n");
+        } else if (event == HCI_EVENT_HID_META) {
+            uint8_t subevent = hci_event_hid_meta_get_subevent_code(packet);
+            if (subevent == HID_SUBEVENT_CONNECTION_OPENED) {
+                if (hid_subevent_connection_opened_get_status(packet) == 0) {
+                    hid_host_cid = hid_subevent_connection_opened_get_hid_cid(packet);
+                    ds4_state.connected = true;
+                    printf("DS4 已連線!\n");
+                }
+            } else if (subevent == HID_SUBEVENT_CONNECTION_CLOSED) {
+                hid_host_cid = 0;
+                ds4_state.connected = false;
+                printf("DS4 已斷開\n");
             }
-            break;
-        case HID_DATA_PACKET:
-            handle_ds4_report(packet, size);
-            break;
+        }
+    } else if (packet_type == HID_DATA_PACKET) {
+        handle_ds4_report(packet, size);
     }
 }
 
-// ======== MicroPython 接口 ========
+// ======== MicroPython 介面函數 ========
 
-static mp_obj_t ds4_sticks(void) {
+static mp_obj_t ds4_read_sticks(void) {
     mp_obj_t t[4] = {
         mp_obj_new_int(ds4_state.lx),
         mp_obj_new_int(ds4_state.ly),
@@ -97,27 +85,18 @@ static mp_obj_t ds4_sticks(void) {
     };
     return mp_obj_new_tuple(4, t);
 }
-MP_DEFINE_CONST_FUN_OBJ_0(ds4_read_sticks_obj, ds4_sticks);
-
-static mp_obj_t ds4_triggers(void) {
-    mp_obj_t t[2] = {
-        mp_obj_new_int(ds4_state.l2),
-        mp_obj_new_int(ds4_state.r2),
-    };
-    return mp_obj_new_tuple(2, t);
-}
-MP_DEFINE_CONST_FUN_OBJ_0(ds4_triggers_obj, ds4_triggers);
+MP_DEFINE_CONST_FUN_OBJ_0(ds4_read_sticks_obj, ds4_read_sticks);
 
 static mp_obj_t ds4_is_connected(void) {
     return mp_obj_new_bool(ds4_state.connected);
 }
 MP_DEFINE_CONST_FUN_OBJ_0(ds4_is_connected_obj, ds4_is_connected);
 
+// 模組字典註冊
 static const mp_rom_map_elem_t ds4_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),  MP_ROM_QSTR(MP_QSTR_ds4) },
-    { MP_ROM_QSTR(MP_QSTR_read_sticks),   MP_ROM_PTR(&ds4_read_sticks_obj) },
-    { MP_ROM_QSTR(MP_QSTR_read_triggers), MP_ROM_PTR(&ds4_triggers_obj) },
-    { MP_ROM_QSTR(MP_QSTR_is_connected),  MP_ROM_PTR(&ds4_is_connected_obj) },
+    { MP_ROM_QSTR(MP_QSTR_sticks),    MP_ROM_PTR(&ds4_read_sticks_obj) },
+    { MP_ROM_QSTR(MP_QSTR_connected), MP_ROM_PTR(&ds4_is_connected_obj) },
 };
 static MP_DEFINE_CONST_DICT(ds4_module_globals, ds4_module_globals_table);
 
@@ -126,4 +105,5 @@ const mp_obj_module_t ds4_user_cmodule = {
     .globals = (mp_obj_dict_t *)&ds4_module_globals,
 };
 
+// 註冊模組名為 ds4，末尾不可有分號
 MP_REGISTER_MODULE(MP_QSTR_ds4, ds4_user_cmodule);
