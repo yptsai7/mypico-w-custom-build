@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Your Repo
         uses: actions/checkout@v4
@@ -28,12 +29,13 @@ jobs:
       - name: Patch btstack_config.h
         run: |
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
-          # 徹底移除所有可能重定義的項
+          # 徹底移除現有的定義以防編譯錯誤 (Redefined)
           sed -i '/#define ENABLE_BLE/d' $BTSTACK_INC/btstack_config.h
           sed -i '/#define ENABLE_CLASSIC/d' $BTSTACK_INC/btstack_config.h
+          
+          # 插入 DS4 必備的經典藍牙與 HID 主機支援
           {
             echo "#define ENABLE_CLASSIC"
-            echo "#define ENABLE_BLE"
             echo "#define ENABLE_BTSTACK_CLASSIC_SUPPORT"
             echo "#define ENABLE_HID_HOST"
             echo "#define MAX_NR_HCI_CONNECTIONS 2"
@@ -44,9 +46,11 @@ jobs:
 
       - name: Inject DS4 Module
         run: |
+          # 建立正確目錄結構：external (母目錄) -> ds4 (模組子目錄)
           mkdir -p $GITHUB_WORKSPACE/external/ds4
-          find . -name "ds4.c" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
-          find . -name "micropython.cmake" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
+          # 將您的檔案複製到建置目錄
+          cp ds4.c $GITHUB_WORKSPACE/external/ds4/
+          cp micropython.cmake $GITHUB_WORKSPACE/external/ds4/
 
       - name: Build mpy-cross
         run: make -C $GITHUB_WORKSPACE/micropython/mpy-cross
@@ -55,6 +59,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           make BOARD=RPI_PICO_W submodules
+          # USER_C_MODULES 指向母目錄，解決 "include directory" 錯誤
           make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/external
 
       - name: Upload Artifact
