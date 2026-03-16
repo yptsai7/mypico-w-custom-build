@@ -29,10 +29,12 @@ jobs:
 
       - name: Setup MicroPython
         run: |
-          git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
-          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $GITHUB_WORKSPACE/pico-sdk
+          # 鎖定已知相容的版本
+          git clone --depth 1 --branch v1.24.1 \
+            https://github.com/micropython/micropython.git \
+            $GITHUB_WORKSPACE/micropython
 
-          # 初始化 MicroPython 子模組（含 BTstack）
+          # 用 MicroPython 內建的 pico-sdk（版本已配對好）
           cd $GITHUB_WORKSPACE/micropython
           git submodule update --init \
             lib/pico-sdk \
@@ -42,16 +44,15 @@ jobs:
             lib/lwip \
             lib/micropython-lib
 
-          # 初始化 pico-sdk 子模組（含 BTstack Classic BT 支援）
-          cd $GITHUB_WORKSPACE/pico-sdk
-          git submodule update --init --recursive
+          # 初始化 pico-sdk 自己的子模組
+          cd $GITHUB_WORKSPACE/micropython/lib/pico-sdk
+          git submodule update --init
 
       - name: Inject DS4 Module from Local
         run: |
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
           cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* \
             $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
-
           echo "=== ds4_ext 目錄內容 ==="
           ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
@@ -61,13 +62,12 @@ jobs:
 
       - name: Build Firmware
         run: |
-          export PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
 
           # 準備子模組
           make BOARD=RPI_PICO_W submodules
 
-          # 編譯（啟用 BTstack Classic BT）
+          # 編譯
           make -j$(nproc) BOARD=RPI_PICO_W \
             USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext \
             CFLAGS_EXTRA="-Wno-error \
@@ -77,7 +77,6 @@ jobs:
               -DENABLE_BLE=1 \
               -DENABLE_HID_HOST=1"
 
-          # 複製產出韌體
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
 
       - name: Upload Artifact
