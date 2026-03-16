@@ -45,14 +45,8 @@ jobs:
           cd $GITHUB_WORKSPACE/micropython/lib/pico-sdk
           git submodule update --init
 
-      - name: Inject DS4 Module from Local
+      - name: Patch btstack_config.h
         run: |
-          mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
-          cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* \
-            $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
-          echo "=== ds4_ext 目錄內容 ==="
-          ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
-
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
           echo "=== 原始 btstack_config.h ==="
           cat $BTSTACK_INC/btstack_config.h
@@ -65,6 +59,14 @@ jobs:
 
           echo "=== 修改後 btstack_config.h ==="
           cat $BTSTACK_INC/btstack_config.h
+
+      - name: Inject DS4 Module from Local
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
+          cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* \
+            $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
+          echo "=== ds4_ext 目錄內容 ==="
+          ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
       - name: Build mpy-cross
         run: |
