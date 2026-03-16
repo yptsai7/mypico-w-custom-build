@@ -1,7 +1,7 @@
-# 將 ds4.c 註冊為用戶模組
+# 註冊用戶模組 ds4
 micropython_add_user_cmodule(ds4 INTERFACE SOURCES ${CMAKE_CURRENT_LIST_DIR}/ds4.c)
 
-# 連結 Pico SDK 的藍牙驅動，必須包含 pico_btstack_cyw43 以支援 Pico W
+# 連結必要的藍牙與硬體抽象層庫
 target_link_libraries(usermod INTERFACE 
     pico_btstack_classic 
     pico_btstack_ble 
