@@ -43,10 +43,12 @@ jobs:
 
       - name: Inject DS4 Module
         run: |
-          # 建立標準的 MicroPython 外部模組目錄結構
+          # 建立兩層目錄結構：external (母目錄) -> ds4 (模組子目錄)
           mkdir -p $GITHUB_WORKSPACE/external/ds4
           find . -name "ds4.c" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
           find . -name "micropython.cmake" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
+          echo "=== 檢查目錄結構 ==="
+          ls -R $GITHUB_WORKSPACE/external
 
       - name: Build mpy-cross
         run: make -C $GITHUB_WORKSPACE/micropython/mpy-cross
@@ -55,7 +57,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           make BOARD=RPI_PICO_W submodules
-          # USER_C_MODULES 指向模組的總目錄 (external)
+          # USER_C_MODULES 指向母目錄，它會自動搜尋其下的 ds4 子目錄
           make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/external
 
       - name: Upload Artifact
