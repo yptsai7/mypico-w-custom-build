@@ -12,35 +12,17 @@ jobs:
     steps:
       - name: Checkout Your Repo
         uses: actions/checkout@v4
-        # 移除了 path: my_project，檔案將直接位於根目錄
 
       - name: Install ARM GCC & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            gcc-arm-none-eabi \
-            libnewlib-arm-none-eabi \
-            build-essential \
-            cmake \
-            python3 \
-            g++ \
-            libstdc++-arm-none-eabi-newlib
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake python3 g++ libstdc++-arm-none-eabi-newlib
 
       - name: Setup MicroPython
         run: |
-          git clone --depth 1 --branch v1.24.1 \
-            https://github.com/micropython/micropython.git \
-            $GITHUB_WORKSPACE/micropython
-
+          git clone --depth 1 --branch v1.24.1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
           cd $GITHUB_WORKSPACE/micropython
-          git submodule update --init \
-            lib/pico-sdk \
-            lib/tinyusb \
-            lib/btstack \
-            lib/cyw43-driver \
-            lib/lwip \
-            lib/micropython-lib
-
+          git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
           cd lib/pico-sdk
           git submodule update --init --recursive
 
@@ -64,9 +46,11 @@ jobs:
       - name: Inject DS4 Module
         run: |
           mkdir -p $GITHUB_WORKSPACE/custom_mod
-          # 檔案現在就在當前目錄，直接複製
-          cp ds4.c $GITHUB_WORKSPACE/custom_mod/
-          cp micropython.cmake $GITHUB_WORKSPACE/custom_mod/
+          # 使用 find 自動尋找檔案路徑，解決 No such file 錯誤
+          find . -name "ds4.c" -exec cp {} $GITHUB_WORKSPACE/custom_mod/ \;
+          find . -name "micropython.cmake" -exec cp {} $GITHUB_WORKSPACE/custom_mod/ \;
+          echo "=== 注入後的檔案內容 ==="
+          ls -R $GITHUB_WORKSPACE/custom_mod
 
       - name: Build mpy-cross
         run: make -C $GITHUB_WORKSPACE/micropython/mpy-cross
@@ -75,9 +59,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           make BOARD=RPI_PICO_W submodules
-          # 執行編譯，指定自定義模組路徑
-          make -j$(nproc) BOARD=RPI_PICO_W \
-            USER_C_MODULES=$GITHUB_WORKSPACE/custom_mod
+          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/custom_mod
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
