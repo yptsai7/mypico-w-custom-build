@@ -18,25 +18,41 @@ jobs:
       - name: Install ARM GCC & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake python3
+          sudo apt-get install -y \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            build-essential \
+            cmake \
+            python3 \
+            g++ \
+            libstdc++-arm-none-eabi-newlib
 
       - name: Setup MicroPython
         run: |
-          # 下載 MicroPython 與 Pico SDK
           git clone --depth 1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
           git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git $GITHUB_WORKSPACE/pico-sdk
-          
-          # 初始化子模組 (包含 BTstack 與 Wi-Fi 驅動)
+
+          # 初始化 MicroPython 子模組（含 BTstack）
           cd $GITHUB_WORKSPACE/micropython
-          git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
+          git submodule update --init \
+            lib/pico-sdk \
+            lib/tinyusb \
+            lib/btstack \
+            lib/cyw43-driver \
+            lib/lwip \
+            lib/micropython-lib
+
+          # 初始化 pico-sdk 子模組（含 BTstack Classic BT 支援）
+          cd $GITHUB_WORKSPACE/pico-sdk
+          git submodule update --init --recursive
 
       - name: Inject DS4 Module from Local
         run: |
-          # 建立模組目錄並複製檔案
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
-          cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
-          
-          # 檢查檔案是否存在
+          cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* \
+            $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
+
+          echo "=== ds4_ext 目錄內容 ==="
           ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
       - name: Build mpy-cross
@@ -47,17 +63,21 @@ jobs:
         run: |
           export PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
-          
-          # 1. 準備子模組
+
+          # 準備子模組
           make BOARD=RPI_PICO_W submodules
-          
-          # 2. 正式編譯
-          # 重點：加入開啟 L2CAP 通道的定義 (DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1)
+
+          # 編譯（啟用 BTstack Classic BT）
           make -j$(nproc) BOARD=RPI_PICO_W \
             USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext \
-            CFLAGS_EXTRA="-Wno-error -DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1"
-          
-          # 3. 複製產出的韌體
+            CFLAGS_EXTRA="-Wno-error \
+              -DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1 \
+              -DBTSTACK_FILE__=__FILE__ \
+              -DENABLE_CLASSIC=1 \
+              -DENABLE_BLE=1 \
+              -DENABLE_HID_HOST=1"
+
+          # 複製產出韌體
           cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
 
       - name: Upload Artifact
