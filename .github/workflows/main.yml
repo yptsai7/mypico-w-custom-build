@@ -29,10 +29,8 @@ jobs:
       - name: Patch btstack_config.h
         run: |
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
-          # 徹底移除現有的 ENABLE_BLE 定義以防編譯錯誤 (Redefined)
+          # 徹底移除現有的 ENABLE_BLE 定義以防衝突
           sed -i '/#define ENABLE_BLE/d' $BTSTACK_INC/btstack_config.h
-          
-          # 插入必要的經典藍牙與 HID 支援
           {
             echo "#define ENABLE_CLASSIC"
             echo "#define ENABLE_BTSTACK_CLASSIC_SUPPORT"
@@ -45,12 +43,10 @@ jobs:
 
       - name: Inject DS4 Module
         run: |
-          # 建立正確的層級結構：external (總目錄) -> ds4 (模組目錄)
+          # 建立標準的 MicroPython 外部模組目錄結構
           mkdir -p $GITHUB_WORKSPACE/external/ds4
           find . -name "ds4.c" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
           find . -name "micropython.cmake" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
-          echo "=== 檢查目錄結構 ==="
-          ls -R $GITHUB_WORKSPACE/external
 
       - name: Build mpy-cross
         run: make -C $GITHUB_WORKSPACE/micropython/mpy-cross
@@ -59,11 +55,11 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           make BOARD=RPI_PICO_W submodules
-          # USER_C_MODULES 指向 external，CMake 會自動掃描其下的 ds4 資料夾
+          # USER_C_MODULES 指向模組的總目錄 (external)
           make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/external
 
       - name: Upload Artifact
-        uses: artifact-upload@v4
+        uses: actions/upload-artifact@v4
         with:
           name: picow-ds4-firmware
           path: $GITHUB_WORKSPACE/micropython/ports/rp2/build-RPI_PICO_W/firmware.uf2
