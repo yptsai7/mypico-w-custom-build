@@ -28,9 +28,10 @@ static ds4_state_t ds4_state = {
 
 static uint16_t hid_host_cid = 0;
 
-// ======== 解析 DS4 數據包 ========
+// ======== 解析 DS4 HID 數據包 ========
 static void handle_ds4_report(const uint8_t *packet, uint16_t size) {
     if (size < 10) return;
+    // DS4 標準 Report ID 0x01 位移量
     ds4_state.lx = packet[1];
     ds4_state.ly = packet[2];
     ds4_state.rx = packet[3];
@@ -39,7 +40,6 @@ static void handle_ds4_report(const uint8_t *packet, uint16_t size) {
     ds4_state.buttons = packet[5] | (packet[6] << 8);
     ds4_state.l2 = packet[8];
     ds4_state.r2 = packet[9];
-    ds4_state.connected = true;
 }
 
 // ======== BTstack 事件處理器 ========
@@ -49,17 +49,19 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 
     if (packet_type == HCI_EVENT_PACKET) {
         if (event == BTSTACK_EVENT_STATE && btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
-            printf("DS4: 藍牙已就緒，請配對手把...\n");
+            printf("DS4: 藍牙已就緒，請將手把設為配對模式 (PS+Share)\n");
         } else if (event == HCI_EVENT_HID_META) {
             uint8_t subevent = hci_event_hid_meta_get_subevent_code(packet);
             if (subevent == HID_SUBEVENT_CONNECTION_OPENED) {
                 if (hid_subevent_connection_opened_get_status(packet) == 0) {
                     hid_host_cid = hid_subevent_connection_opened_get_hid_cid(packet);
                     ds4_state.connected = true;
+                    printf("DS4: 連線成功!\n");
                 }
             } else if (subevent == HID_SUBEVENT_CONNECTION_CLOSED) {
                 hid_host_cid = 0;
                 ds4_state.connected = false;
+                printf("DS4: 連線中斷\n");
             }
         }
     } else if (packet_type == HID_DATA_PACKET) {
@@ -67,7 +69,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
     }
 }
 
-// ======== MicroPython 介面 ========
+// ======== MicroPython 接口 ========
 
 static mp_obj_t ds4_read_sticks(void) {
     mp_obj_t t[4] = {
@@ -97,5 +99,5 @@ const mp_obj_module_t ds4_user_cmodule = {
     .globals = (mp_obj_dict_t *)&ds4_module_globals,
 };
 
-// 註冊模組
+// 註冊模組名為 ds4，末尾不要加分號
 MP_REGISTER_MODULE(MP_QSTR_ds4, ds4_user_cmodule);
