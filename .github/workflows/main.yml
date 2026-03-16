@@ -12,8 +12,7 @@ jobs:
     steps:
       - name: Checkout Your Repo
         uses: actions/checkout@v4
-        with:
-          path: my_project
+        # 移除了 path: my_project，檔案將直接位於根目錄
 
       - name: Install ARM GCC & Dependencies
         run: |
@@ -42,13 +41,13 @@ jobs:
             lib/lwip \
             lib/micropython-lib
 
-          cd $GITHUB_WORKSPACE/micropython/lib/pico-sdk
+          cd lib/pico-sdk
           git submodule update --init --recursive
 
       - name: Patch btstack_config.h
         run: |
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
-          # 關鍵修正：先移除可能導致重複定義的 ENABLE_BLE
+          # 徹底移除現有的 ENABLE_BLE 定義以防衝突
           sed -i '/#define ENABLE_BLE/d' $BTSTACK_INC/btstack_config.h
           
           # 插入必要的經典藍牙與 HID 支援
@@ -65,8 +64,9 @@ jobs:
       - name: Inject DS4 Module
         run: |
           mkdir -p $GITHUB_WORKSPACE/custom_mod
-          cp $GITHUB_WORKSPACE/my_project/ds4.c $GITHUB_WORKSPACE/custom_mod/
-          cp $GITHUB_WORKSPACE/my_project/micropython.cmake $GITHUB_WORKSPACE/custom_mod/
+          # 檔案現在就在當前目錄，直接複製
+          cp ds4.c $GITHUB_WORKSPACE/custom_mod/
+          cp micropython.cmake $GITHUB_WORKSPACE/custom_mod/
 
       - name: Build mpy-cross
         run: make -C $GITHUB_WORKSPACE/micropython/mpy-cross
@@ -75,7 +75,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
           make BOARD=RPI_PICO_W submodules
-          # 執行編譯，指定用戶模組路徑
+          # 執行編譯，指定自定義模組路徑
           make -j$(nproc) BOARD=RPI_PICO_W \
             USER_C_MODULES=$GITHUB_WORKSPACE/custom_mod
 
