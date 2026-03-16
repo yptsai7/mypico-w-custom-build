@@ -56,6 +56,24 @@ jobs:
           echo "=== ds4_ext 目錄內容 ==="
           ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
+          # 覆蓋 MicroPython 的 btstack_config.h，附加 Classic BT 支援
+          BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
+          echo "=== 原始 btstack_config.h ==="
+          cat $BTSTACK_INC/btstack_config.h
+
+          cat >> $BTSTACK_INC/btstack_config.h << 'EOF'
+
+// === DS4 Classic BT 支援 ===
+#define ENABLE_CLASSIC 1
+#define ENABLE_HID_HOST 1
+#define NVM_NUM_LINK_KEYS 16
+#define NVM_NUM_DEVICE_DB_ENTRIES 16
+#define MAX_NR_HID_HOST_CONNECTIONS 2
+EOF
+
+          echo "=== 修改後 btstack_config.h ==="
+          cat $BTSTACK_INC/btstack_config.h
+
       - name: Build mpy-cross
         run: |
           make -C $GITHUB_WORKSPACE/micropython/mpy-cross
