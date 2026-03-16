@@ -26,7 +26,7 @@ static ds4_state_t ds4_state = {
     .hat = 0x8, .connected = false
 };
 
-// ... 此處保留您原本處理藍牙連線與 HID 封包的 packet_handler 等邏輯 ...
+// ... 此處保留您原本處理藍牙 HID 封包的 packet_handler 等邏輯 ...
 
 // ======== MicroPython 接口函數 ========
 
@@ -39,7 +39,7 @@ static mp_obj_t ds4_sticks(void) {
     };
     return mp_obj_new_tuple(4, t);
 }
-// 修正：移除巨集前的 static，不要加分號
+// 修正：移除前面的 static 與結尾的分號，確保 QSTR 生成正確
 MP_DEFINE_CONST_FUN_OBJ_0(ds4_read_sticks_obj, ds4_sticks);
 
 static mp_obj_t ds4_triggers(void) {
@@ -69,5 +69,5 @@ const mp_obj_module_t ds4_user_cmodule = {
     .globals = (mp_obj_dict_t *)&ds4_module_globals,
 };
 
-// 註冊模組：關鍵步驟，確保名稱為 ds4
+// 註冊模組
 MP_REGISTER_MODULE(MP_QSTR_ds4, ds4_user_cmodule);
