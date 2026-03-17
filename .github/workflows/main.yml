@@ -80,20 +80,6 @@ jobs:
           echo "=== 確認 patch ==="
           grep -A10 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
 
-      - name: Debug poll mechanism
-        run: |
-          echo "=== mp_bluetooth_hci_poll full ==="
-          grep -A20 "void mp_bluetooth_hci_poll" \
-            $GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c
-
-          echo "=== modbluetooth_btstack lines 230-260 ==="
-          sed -n '230,260p' \
-            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c
-
-          echo "=== mp_bluetooth_hci_poll_in_ms calls ==="
-          grep -n "poll_in_ms\|poll_now" \
-            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -20
-
       - name: Inject DS4 Module from Local
         run: |
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
