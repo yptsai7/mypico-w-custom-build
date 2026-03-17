@@ -40,6 +40,7 @@ static uint8_t hid_descriptor_storage[MAX_ATTRIBUTE_VALUE_SIZE];
 static uint16_t hid_host_cid = 0;
 static bool hid_descriptor_available = false;
 static hid_protocol_mode_t hid_report_mode = HID_PROTOCOL_MODE_REPORT;
+static bd_addr_t remote_addr;
 
 // ======== 掃描結構 ========
 enum DEVICE_STATE { NAME_REQUEST, NAME_INQUIRED, NAME_FETCHED };
@@ -51,7 +52,6 @@ struct device {
 };
 static struct device devices[MAX_DEVICES];
 static int deviceCount = 0;
-static bd_addr_t remote_addr;
 static bool mac_found = false;
 static bool scanning = false;
 
@@ -143,7 +143,6 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
                 ds4_state.hid_ready = true;
                 ds4_debug_counter = 11;
             }
-            // 不用 timer，等 Python 呼叫 ds4.poll() 來啟動掃描
             ds4_debug_counter = 12;
         }
         return;
@@ -293,6 +292,35 @@ void ds4_btstack_init(void) {
 
 // ======== MicroPython API ========
 
+// ds4.connect(mac_str) - 直接用 MAC 連線
+static mp_obj_t ds4_connect(mp_obj_t mac_obj) {
+    const char *mac_str = mp_obj_str_get_str(mac_obj);
+    printf("[DS4] connect to %s\n", mac_str);
+
+    if (!ds4_state.hid_ready) {
+        printf("[DS4] HID not ready\n");
+        return mp_obj_new_bool(false);
+    }
+
+    bd_addr_t addr;
+    if (!sscanf_bd_addr(mac_str, addr)) {
+        printf("[DS4] invalid MAC\n");
+        return mp_obj_new_bool(false);
+    }
+
+    bd_addr_copy(remote_addr, addr);
+    mac_found = true;
+    scanning = false;
+
+    printf("[DS4] Connecting to %s\n", bd_addr_to_str(remote_addr));
+    uint8_t status = hid_host_connect(remote_addr, hid_report_mode, &hid_host_cid);
+    printf("[DS4] hid_host_connect status=%d\n", status);
+    ds4_debug_counter = 60 + status;
+
+    return mp_obj_new_bool(status == ERROR_CODE_SUCCESS);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(ds4_connect_obj, ds4_connect);
+
 // ds4.poll() - Python 端定期呼叫，觸發掃描
 static mp_obj_t ds4_poll(void) {
     if (ds4_state.hid_ready && !scanning && !mac_found && !ds4_state.connected) {
@@ -359,6 +387,7 @@ static const mp_rom_map_elem_t ds4_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),  MP_ROM_QSTR(MP_QSTR_ds4) },
     { MP_ROM_QSTR(MP_QSTR_start),     MP_ROM_PTR(&ds4_start_obj) },
     { MP_ROM_QSTR(MP_QSTR_poll),      MP_ROM_PTR(&ds4_poll_obj) },
+    { MP_ROM_QSTR(MP_QSTR_connect),   MP_ROM_PTR(&ds4_connect_obj) },
     { MP_ROM_QSTR(MP_QSTR_debug),     MP_ROM_PTR(&ds4_debug_obj) },
     { MP_ROM_QSTR(MP_QSTR_connected), MP_ROM_PTR(&ds4_connected_obj) },
     { MP_ROM_QSTR(MP_QSTR_buttons),   MP_ROM_PTR(&ds4_read_buttons_obj) },
