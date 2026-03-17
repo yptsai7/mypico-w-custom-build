@@ -55,10 +55,6 @@ static bd_addr_t remote_addr;
 static bool mac_found = false;
 static bool scanning = false;
 
-// ======== btstack_timer ========
-static btstack_timer_source_t scan_timer;
-static bool scan_timer_active = false;
-
 // ======== DS4 HID Report 解析 ========
 struct __attribute__((packed)) input_report_17 {
     uint8_t report_id;
@@ -113,23 +109,10 @@ static void continue_remote_names(void) {
             return;
         }
     // 重新掃描
-    ds4_debug_counter = 20;
+    ds4_debug_counter = 40;
     uint8_t result = gap_inquiry_start(INQUIRY_INTERVAL);
-    printf("[DS4] gap_inquiry_start=%d\n", result);
-    ds4_debug_counter = 21 + result;
-    deviceCount = 0;
-    mac_found = false;
-    scanning = true;
-}
-
-static void scan_timer_handler(btstack_timer_source_t *ts) {
-    UNUSED(ts);
-    scan_timer_active = false;
-    ds4_debug_counter = 20;
-    printf("[DS4] Timer fired, calling gap_inquiry_start\n");
-    uint8_t result = gap_inquiry_start(INQUIRY_INTERVAL);
-    printf("[DS4] gap_inquiry_start result=%d\n", result);
-    ds4_debug_counter = 21 + result;
+    printf("[DS4] re-scan gap_inquiry_start=%d\n", result);
+    ds4_debug_counter = 41 + result;
     deviceCount = 0;
     mac_found = false;
     scanning = true;
@@ -139,13 +122,6 @@ static void scan_timer_handler(btstack_timer_source_t *ts) {
 static void packet_handler(uint8_t ptype, uint16_t channel,
                            uint8_t *packet, uint16_t size) {
     UNUSED(channel); UNUSED(size);
-
-    // 記錄所有收到的事件
-    if (ptype == HCI_EVENT_PACKET) {
-        uint8_t event = hci_event_packet_get_type(packet);
-        printf("[DS4] event=0x%02x\n", event);
-    }
-
     if (ptype != HCI_EVENT_PACKET) return;
 
     uint8_t event = hci_event_packet_get_type(packet);
@@ -167,14 +143,8 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
                 ds4_state.hid_ready = true;
                 ds4_debug_counter = 11;
             }
-
-            if (!scan_timer_active) {
-                btstack_run_loop_set_timer(&scan_timer, 1000);
-                btstack_run_loop_set_timer_handler(&scan_timer, scan_timer_handler);
-                btstack_run_loop_add_timer(&scan_timer);
-                scan_timer_active = true;
-                ds4_debug_counter = 12;
-            }
+            // 不用 timer，等 Python 呼叫 ds4.poll() 來啟動掃描
+            ds4_debug_counter = 12;
         }
         return;
     }
@@ -217,7 +187,7 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
 
         } else if (event == GAP_EVENT_INQUIRY_COMPLETE) {
             ds4_debug_counter = 31;
-            printf("[DS4] Inquiry complete\n");
+            printf("[DS4] Inquiry complete, deviceCount=%d\n", deviceCount);
             for (int i = 0; i < deviceCount; i++)
                 if (devices[i].state == NAME_INQUIRED)
                     devices[i].state = NAME_REQUEST;
@@ -251,18 +221,13 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
         gap_pin_code_response(addr, "0000");
         break;
     case HCI_EVENT_DISCONNECTION_COMPLETE:
-        printf("[DS4] Disconnected, restarting scan in 2s\n");
+        printf("[DS4] Disconnected\n");
         ds4_state.connected = false;
         hid_host_cid = 0;
         hid_descriptor_available = false;
         mac_found = false;
         scanning = false;
-        if (!scan_timer_active) {
-            btstack_run_loop_set_timer(&scan_timer, 2000);
-            btstack_run_loop_set_timer_handler(&scan_timer, scan_timer_handler);
-            btstack_run_loop_add_timer(&scan_timer);
-            scan_timer_active = true;
-        }
+        ds4_debug_counter = 12;
         break;
     case HCI_EVENT_HID_META: {
         uint8_t hid_ev = hci_event_hid_meta_get_subevent_code(packet);
@@ -283,6 +248,7 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
             hid_host_cid = hid_subevent_connection_opened_get_hid_cid(packet);
             printf("[DS4] Connected!\n");
             ds4_state.connected = true;
+            ds4_debug_counter = 99;
             break;
         case HID_SUBEVENT_DESCRIPTOR_AVAILABLE:
             if (hid_subevent_descriptor_available_get_status(packet)
@@ -326,6 +292,23 @@ void ds4_btstack_init(void) {
 }
 
 // ======== MicroPython API ========
+
+// ds4.poll() - Python 端定期呼叫，觸發掃描
+static mp_obj_t ds4_poll(void) {
+    if (ds4_state.hid_ready && !scanning && !mac_found && !ds4_state.connected) {
+        ds4_debug_counter = 50;
+        printf("[DS4] poll: starting scan\n");
+        uint8_t result = gap_inquiry_start(INQUIRY_INTERVAL);
+        printf("[DS4] gap_inquiry_start=%d\n", result);
+        ds4_debug_counter = 51 + result;
+        deviceCount = 0;
+        mac_found = false;
+        scanning = true;
+    }
+    return mp_obj_new_int(ds4_debug_counter);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(ds4_poll_obj, ds4_poll);
+
 static mp_obj_t ds4_start(void) {
     printf("[DS4] ds4.start() called, debug=%d\n", ds4_debug_counter);
     return mp_const_none;
@@ -375,6 +358,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0(ds4_hat_obj, ds4_hat);
 static const mp_rom_map_elem_t ds4_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),  MP_ROM_QSTR(MP_QSTR_ds4) },
     { MP_ROM_QSTR(MP_QSTR_start),     MP_ROM_PTR(&ds4_start_obj) },
+    { MP_ROM_QSTR(MP_QSTR_poll),      MP_ROM_PTR(&ds4_poll_obj) },
     { MP_ROM_QSTR(MP_QSTR_debug),     MP_ROM_PTR(&ds4_debug_obj) },
     { MP_ROM_QSTR(MP_QSTR_connected), MP_ROM_PTR(&ds4_connected_obj) },
     { MP_ROM_QSTR(MP_QSTR_buttons),   MP_ROM_PTR(&ds4_read_buttons_obj) },
