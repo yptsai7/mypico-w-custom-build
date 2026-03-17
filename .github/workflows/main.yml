@@ -79,6 +79,19 @@ jobs:
           echo "=== ds4_ext 目錄內容 ==="
           ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
+      - name: Debug BTstack Init
+        run: |
+          echo "=== modbluetooth_btstack.c BTstack init ==="
+          grep -n "mp_bluetooth_btstack_start\|cyw43_arch_init\|hci_power_control\|btstack_run_loop\|hid_host_init\|gap_inquiry" \
+            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -50
+
+          echo "=== rp2 main.c bluetooth init ==="
+          grep -n "bluetooth\|btstack\|cyw43" \
+            $GITHUB_WORKSPACE/micropython/ports/rp2/main.c | head -30
+
+          echo "=== btstack_config_common.h ==="
+          cat $GITHUB_WORKSPACE/micropython/extmod/btstack/btstack_config_common.h
+
       - name: Build mpy-cross
         run: |
           make -C $GITHUB_WORKSPACE/micropython/mpy-cross
