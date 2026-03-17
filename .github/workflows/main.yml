@@ -75,10 +75,13 @@ jobs:
         run: |
           BTSTACKPORT=$GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c
 
-          python3 -c "f=open('$BTSTACKPORT','r');c=f.read();f.close();old='void mp_bluetooth_btstack_port_start(void) {\n    hci_power_control(HCI_POWER_ON);\n}';new='void mp_bluetooth_btstack_port_start(void) {\n    static int ds4_init_done = 0;\n    if (!ds4_init_done) {\n        extern void ds4_btstack_init(void);\n        ds4_btstack_init();\n        ds4_init_done = 1;\n    }\n    hci_power_control(HCI_POWER_ON);\n}';c=c.replace(old,new);f=open('$BTSTACKPORT','w');f.write(c);f.close();print('Patched OK')"
+          python3 -c "f=open('$BTSTACKPORT','r');c=f.read();f.close();old1='void mp_bluetooth_btstack_port_start(void) {\n    hci_power_control(HCI_POWER_ON);\n}';new1='void mp_bluetooth_btstack_port_start(void) {\n    static int ds4_init_done = 0;\n    if (!ds4_init_done) {\n        extern void ds4_btstack_init(void);\n        ds4_btstack_init();\n        ds4_init_done = 1;\n    }\n    hci_power_control(HCI_POWER_ON);\n}';c=c.replace(old1,new1);old2='void mp_bluetooth_hci_poll(void) {\n    if (mp_bluetooth_btstack_state == MP_BLUETOOTH_BTSTACK_STATE_OFF) {\n        return;\n    }';new2='void mp_bluetooth_hci_poll(void) {\n    if (mp_bluetooth_btstack_state == MP_BLUETOOTH_BTSTACK_STATE_OFF) {\n        return;\n    }\n    mp_bluetooth_hci_poll_in_ms(10);';c=c.replace(old2,new2);f=open('$BTSTACKPORT','w');f.write(c);f.close();print('Patched OK')"
 
-          echo "=== 確認 patch ==="
-          grep -A10 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
+          echo "=== 確認 port_start patch ==="
+          grep -A12 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
+
+          echo "=== 確認 hci_poll patch ==="
+          grep -A8 "void mp_bluetooth_hci_poll" $BTSTACKPORT
 
       - name: Inject DS4 Module from Local
         run: |
