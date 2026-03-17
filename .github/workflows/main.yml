@@ -80,23 +80,19 @@ jobs:
           echo "=== 確認 patch ==="
           grep -A10 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
 
-      - name: Debug BLE active flow
+      - name: Debug poll mechanism
         run: |
-          echo "=== mp_bluetooth_enable flow ==="
-          grep -n "mp_bluetooth_enable\|poll_now\|soft_timer\|btstack_port_start\|STATE_ACTIVE\|STATE_STARTING" \
-            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -50
+          echo "=== mp_bluetooth_hci_poll full ==="
+          grep -A20 "void mp_bluetooth_hci_poll" \
+            $GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c
 
-          echo "=== modbluetooth_btstack.c lines 640-680 ==="
-          sed -n '640,680p' \
+          echo "=== modbluetooth_btstack lines 230-260 ==="
+          sed -n '230,260p' \
             $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c
 
-          echo "=== mp_bluetooth_hci_poll content ==="
-          grep -n "mp_bluetooth_hci_poll\b" \
-            $GITHUB_WORKSPACE/micropython/ports/rp2/mpbthciport.c
-
-          echo "=== soft_timer schedule ==="
-          grep -n "soft_timer\|poll_in_ms\|poll_now" \
-            $GITHUB_WORKSPACE/micropython/ports/rp2/mpbthciport.c
+          echo "=== mp_bluetooth_hci_poll_in_ms calls ==="
+          grep -n "poll_in_ms\|poll_now" \
+            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -20
 
       - name: Inject DS4 Module from Local
         run: |
