@@ -18,54 +18,85 @@ jobs:
       - name: Install ARM GCC & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake python3 g++ libstdc++-arm-none-eabi-newlib
+          sudo apt-get install -y \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            build-essential \
+            cmake \
+            python3 \
+            g++ \
+            libstdc++-arm-none-eabi-newlib
 
       - name: Setup MicroPython
         run: |
-          git clone --depth 1 --branch v1.24.1 https://github.com/micropython/micropython.git $GITHUB_WORKSPACE/micropython
+          git clone --depth 1 --branch v1.24.1 \
+            https://github.com/micropython/micropython.git \
+            $GITHUB_WORKSPACE/micropython
+
           cd $GITHUB_WORKSPACE/micropython
-          git submodule update --init lib/pico-sdk lib/tinyusb lib/btstack lib/cyw43-driver lib/lwip lib/micropython-lib
-          cd lib/pico-sdk
+          git submodule update --init \
+            lib/pico-sdk \
+            lib/tinyusb \
+            lib/btstack \
+            lib/cyw43-driver \
+            lib/lwip \
+            lib/micropython-lib
+
+          # 完整初始化 pico-sdk 所有子模組
+          cd $GITHUB_WORKSPACE/micropython/lib/pico-sdk
           git submodule update --init --recursive
 
       - name: Patch btstack_config.h
         run: |
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
-          # 移除現有的定義，防止與我們注入的配置衝突
-          sed -i '/#define ENABLE_BLE/d' $BTSTACK_INC/btstack_config.h
-          sed -i '/#define ENABLE_CLASSIC/d' $BTSTACK_INC/btstack_config.h
-          {
-            echo "#define ENABLE_CLASSIC"
-            echo "#define ENABLE_BTSTACK_CLASSIC_SUPPORT"
-            echo "#define ENABLE_HID_HOST"
-            echo "#define MAX_NR_HCI_CONNECTIONS 2"
-            echo "#define MAX_NR_HID_HOST_CONNECTIONS 2"
-          } > temp_config
-          cat $BTSTACK_INC/btstack_config.h >> temp_config
-          mv temp_config $BTSTACK_INC/btstack_config.h
+          echo "=== 原始 btstack_config.h ==="
+          cat $BTSTACK_INC/btstack_config.h
 
-      - name: Inject DS4 Module
+          printf '\n#ifndef ENABLE_CLASSIC\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define ENABLE_CLASSIC 1\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#ifndef ENABLE_HID_HOST\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define ENABLE_HID_HOST 1\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#ifndef NVM_NUM_LINK_KEYS\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define NVM_NUM_LINK_KEYS 16\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#ifndef NVM_NUM_DEVICE_DB_ENTRIES\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define NVM_NUM_DEVICE_DB_ENTRIES 16\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#ifndef MAX_NR_HID_HOST_CONNECTIONS\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#define MAX_NR_HID_HOST_CONNECTIONS 2\n' >> $BTSTACK_INC/btstack_config.h
+          printf '#endif\n' >> $BTSTACK_INC/btstack_config.h
+
+          echo "=== 修改後 btstack_config.h ==="
+          cat $BTSTACK_INC/btstack_config.h
+
+      - name: Inject DS4 Module from Local
         run: |
-          # 建立母目錄 external，並在其中建立 ds4 模組目錄
-          mkdir -p $GITHUB_WORKSPACE/external/ds4
-          # 自動搜尋並複製檔案，確保路徑正確
-          find $GITHUB_WORKSPACE/my_project -name "ds4.c" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
-          find $GITHUB_WORKSPACE/my_project -name "micropython.cmake" -exec cp {} $GITHUB_WORKSPACE/external/ds4/ \;
-          echo "=== 檢查注入後的目錄結構 ==="
-          ls -R $GITHUB_WORKSPACE/external
+          mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
+          cp -r $GITHUB_WORKSPACE/my_project/external_modules/ds4/* \
+            $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
+          echo "=== ds4_ext 目錄內容 ==="
+          ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
       - name: Build mpy-cross
-        run: make -C $GITHUB_WORKSPACE/micropython/mpy-cross
+        run: |
+          make -C $GITHUB_WORKSPACE/micropython/mpy-cross
 
       - name: Build Firmware
         run: |
           cd $GITHUB_WORKSPACE/micropython/ports/rp2
+
           make BOARD=RPI_PICO_W submodules
-          # USER_C_MODULES 指向母目錄 external，CMake 會自動載入 ds4/micropython.cmake
-          make -j$(nproc) BOARD=RPI_PICO_W USER_C_MODULES=$GITHUB_WORKSPACE/external
+
+          make -j$(nproc) BOARD=RPI_PICO_W \
+            USER_C_MODULES=$GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/micropython.cmake \
+            CFLAGS_EXTRA="-Wno-error -DMICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS=1"
+
+          cp build-RPI_PICO_W/firmware.uf2 $GITHUB_WORKSPACE/picow_ds4.uf2
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: picow-ds4-firmware
-          path: $GITHUB_WORKSPACE/micropython/ports/rp2/build-RPI_PICO_W/firmware.uf2
+          path: picow_ds4.uf2
