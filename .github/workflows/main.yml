@@ -80,16 +80,23 @@ jobs:
           echo "=== 確認 patch ==="
           grep -A10 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
 
-      - name: Debug CYW43 BTstack Transport
+      - name: Debug BLE active flow
         run: |
-          echo "=== btstack_hci_transport_cyw43 files ==="
-          find $GITHUB_WORKSPACE/micropython/lib/pico-sdk -name "*cyw43*btstack*" -o -name "*btstack*cyw43*" 2>/dev/null
+          echo "=== mp_bluetooth_enable flow ==="
+          grep -n "mp_bluetooth_enable\|poll_now\|soft_timer\|btstack_port_start\|STATE_ACTIVE\|STATE_STARTING" \
+            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -50
 
-          echo "=== files containing hci_transport_cyw43 ==="
-          find $GITHUB_WORKSPACE/micropython/lib/pico-sdk -name "*.c" | xargs grep -l "hci_transport_cyw43" 2>/dev/null
+          echo "=== modbluetooth_btstack.c lines 640-680 ==="
+          sed -n '640,680p' \
+            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c
 
-          echo "=== btstack_hci_transport_cyw43.c head ==="
-          find $GITHUB_WORKSPACE/micropython/lib/pico-sdk -name "btstack_hci_transport_cyw43.c" -exec head -80 {} \;
+          echo "=== mp_bluetooth_hci_poll content ==="
+          grep -n "mp_bluetooth_hci_poll\b" \
+            $GITHUB_WORKSPACE/micropython/ports/rp2/mpbthciport.c
+
+          echo "=== soft_timer schedule ==="
+          grep -n "soft_timer\|poll_in_ms\|poll_now" \
+            $GITHUB_WORKSPACE/micropython/ports/rp2/mpbthciport.c
 
       - name: Inject DS4 Module from Local
         run: |
