@@ -282,6 +282,10 @@ void ds4_btstack_init(void) {
     }
     ds4_debug_counter = 3;
 
+    // Classic BT 需要 L2CAP 和 SDP
+    l2cap_init();
+    sdp_init();
+
     hci_event_cb.callback = &packet_handler;
     hci_add_event_handler(&hci_event_cb);
 
@@ -291,7 +295,6 @@ void ds4_btstack_init(void) {
 
 // ======== MicroPython API ========
 
-// ds4.connect(mac_str) - 直接用 MAC 連線
 static mp_obj_t ds4_connect(mp_obj_t mac_obj) {
     const char *mac_str = mp_obj_str_get_str(mac_obj);
     printf("[DS4] connect to %s\n", mac_str);
@@ -320,9 +323,7 @@ static mp_obj_t ds4_connect(mp_obj_t mac_obj) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(ds4_connect_obj, ds4_connect);
 
-// ds4.poll() - 強制 poll BTstack 並觸發掃描
 static mp_obj_t ds4_poll(void) {
-    // 強制 poll BTstack HCI
     extern void mp_bluetooth_hci_poll(void);
     mp_bluetooth_hci_poll();
 
