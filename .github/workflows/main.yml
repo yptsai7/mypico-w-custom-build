@@ -80,6 +80,17 @@ jobs:
           echo "=== 確認 patch ==="
           grep -A10 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
 
+      - name: Debug CYW43 BTstack Transport
+        run: |
+          echo "=== btstack_hci_transport_cyw43 files ==="
+          find $GITHUB_WORKSPACE/micropython/lib/pico-sdk -name "*cyw43*btstack*" -o -name "*btstack*cyw43*" 2>/dev/null
+
+          echo "=== files containing hci_transport_cyw43 ==="
+          find $GITHUB_WORKSPACE/micropython/lib/pico-sdk -name "*.c" | xargs grep -l "hci_transport_cyw43" 2>/dev/null
+
+          echo "=== btstack_hci_transport_cyw43.c head ==="
+          find $GITHUB_WORKSPACE/micropython/lib/pico-sdk -name "btstack_hci_transport_cyw43.c" -exec head -80 {} \;
+
       - name: Inject DS4 Module from Local
         run: |
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
