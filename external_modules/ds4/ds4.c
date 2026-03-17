@@ -28,6 +28,8 @@ static ds4_state_t ds4_state = {
     .initialized = false, .hid_ready = false
 };
 
+static int ds4_debug_counter = 0;
+
 // ======== BTstack 變數 ========
 #define MAX_ATTRIBUTE_VALUE_SIZE 512
 #define MAX_DEVICES 10
@@ -139,10 +141,10 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
     bd_addr_t addr;
     uint8_t status;
 
-    // HCI 就緒時初始化 HID Host 並開始掃描
     if (event == BTSTACK_EVENT_STATE) {
         if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
             printf("[DS4] HCI working! Init HID host\n");
+            ds4_debug_counter = 10;
 
             if (!ds4_state.hid_ready) {
                 hid_host_init(hid_descriptor_storage, sizeof(hid_descriptor_storage));
@@ -152,6 +154,7 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
                     LM_LINK_POLICY_ENABLE_ROLE_SWITCH);
                 hci_set_master_slave_policy(HCI_ROLE_MASTER);
                 ds4_state.hid_ready = true;
+                ds4_debug_counter = 11;
             }
 
             if (!scan_timer_active) {
@@ -159,6 +162,7 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
                 btstack_run_loop_set_timer_handler(&scan_timer, scan_timer_handler);
                 btstack_run_loop_add_timer(&scan_timer);
                 scan_timer_active = true;
+                ds4_debug_counter = 12;
             }
         }
         return;
@@ -293,23 +297,31 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
 
 // ======== 由 mpbtstackport.c 呼叫的初始化函數 ========
 void ds4_btstack_init(void) {
-    if (ds4_state.initialized) return;
-    printf("[DS4] ds4_btstack_init called\n");
+    ds4_debug_counter = 1;
+    if (ds4_state.initialized) {
+        ds4_debug_counter = 2;
+        return;
+    }
+    ds4_debug_counter = 3;
 
-    // 只註冊 event handler，hid_host_init 等 HCI_STATE_WORKING 再呼叫
     hci_event_cb.callback = &packet_handler;
     hci_add_event_handler(&hci_event_cb);
 
     ds4_state.initialized = true;
-    printf("[DS4] ds4_btstack_init done\n");
+    ds4_debug_counter = 4;
 }
 
 // ======== MicroPython API ========
 static mp_obj_t ds4_start(void) {
-    printf("[DS4] ds4.start() called, initialized=%d\n", ds4_state.initialized);
+    printf("[DS4] ds4.start() called, debug=%d\n", ds4_debug_counter);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(ds4_start_obj, ds4_start);
+
+static mp_obj_t ds4_debug(void) {
+    return mp_obj_new_int(ds4_debug_counter);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(ds4_debug_obj, ds4_debug);
 
 static mp_obj_t ds4_connected(void) {
     return mp_obj_new_bool(ds4_state.connected);
@@ -349,6 +361,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0(ds4_hat_obj, ds4_hat);
 static const mp_rom_map_elem_t ds4_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),  MP_ROM_QSTR(MP_QSTR_ds4) },
     { MP_ROM_QSTR(MP_QSTR_start),     MP_ROM_PTR(&ds4_start_obj) },
+    { MP_ROM_QSTR(MP_QSTR_debug),     MP_ROM_PTR(&ds4_debug_obj) },
     { MP_ROM_QSTR(MP_QSTR_connected), MP_ROM_PTR(&ds4_connected_obj) },
     { MP_ROM_QSTR(MP_QSTR_buttons),   MP_ROM_PTR(&ds4_read_buttons_obj) },
     { MP_ROM_QSTR(MP_QSTR_sticks),    MP_ROM_PTR(&ds4_read_sticks_obj) },
