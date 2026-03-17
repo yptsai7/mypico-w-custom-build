@@ -71,6 +71,15 @@ jobs:
           echo "=== 修改後 btstack_config.h ==="
           cat $BTSTACK_INC/btstack_config.h
 
+      - name: Patch mpbtstackport.c for Classic BT HID
+        run: |
+          BTSTACKPORT=$GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c
+
+          python3 -c "f=open('$BTSTACKPORT','r');c=f.read();f.close();old='void mp_bluetooth_btstack_port_init(void) {';new='void mp_bluetooth_btstack_port_init(void) {\n    extern void ds4_btstack_init(void);\n    ds4_btstack_init();';c=c.replace(old,new);f=open('$BTSTACKPORT','w');f.write(c);f.close();print('Patched OK')"
+
+          echo "=== 確認 patch ==="
+          grep -A5 "mp_bluetooth_btstack_port_init" $BTSTACKPORT
+
       - name: Inject DS4 Module from Local
         run: |
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
@@ -78,25 +87,6 @@ jobs:
             $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
           echo "=== ds4_ext 目錄內容 ==="
           ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
-
-      - name: Debug MicroPython BTstack Core
-        run: |
-          echo "=== mp_bluetooth_hci_init ==="
-          grep -n "mp_bluetooth_hci_init\|hci_power_control\|cyw43_arch\|btstack_run_loop_execute\|hid_host" \
-            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -60
-
-          echo "=== ports/rp2 btstack_inc files ==="
-          ls $GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc/
-          cat $GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc/btstack_config.h
-
-          echo "=== mpbthciport.c ==="
-          cat $GITHUB_WORKSPACE/micropython/ports/rp2/mpbthciport.c 2>/dev/null || echo "not found"
-
-          echo "=== mpbtstackport.c ==="
-          cat $GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c 2>/dev/null || echo "not found"
-
-          echo "=== ls ports/rp2 bt files ==="
-          ls $GITHUB_WORKSPACE/micropython/ports/rp2/ | grep -i bt
 
       - name: Build mpy-cross
         run: |
