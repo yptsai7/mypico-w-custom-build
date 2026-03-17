@@ -282,8 +282,8 @@ void ds4_btstack_init(void) {
     }
     ds4_debug_counter = 3;
 
-    // Classic BT 需要 L2CAP 和 SDP
-    l2cap_init();
+    // 不呼叫 l2cap_init()，MicroPython 已經呼叫了
+    // 只加入 SDP（Classic BT 需要）
     sdp_init();
 
     hci_event_cb.callback = &packet_handler;
