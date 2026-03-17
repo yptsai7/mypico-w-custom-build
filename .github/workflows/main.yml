@@ -50,18 +50,7 @@ jobs:
           BTSTACK_INC=$GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc
           BTSTACK_COMMON=$GITHUB_WORKSPACE/micropython/extmod/btstack/btstack_config_common.h
 
-          python3 -c "
-with open('$BTSTACK_COMMON', 'r') as f:
-    content = f.read()
-content = content.replace(
-    '#define ENABLE_BLE',
-    '#ifndef ENABLE_BLE\n#define ENABLE_BLE\n#endif'
-)
-with open('$BTSTACK_COMMON', 'w') as f:
-    f.write(content)
-print('修改後 btstack_config_common.h:')
-print(content)
-"
+          python3 -c "f=open('$BTSTACK_COMMON','r');c=f.read();f.close();c=c.replace('#define ENABLE_BLE','#ifndef ENABLE_BLE\n#define ENABLE_BLE\n#endif');f=open('$BTSTACK_COMMON','w');f.write(c);f.close();print(c)"
 
           printf '\n#ifndef ENABLE_CLASSIC\n' >> $BTSTACK_INC/btstack_config.h
           printf '#define ENABLE_CLASSIC 1\n' >> $BTSTACK_INC/btstack_config.h
