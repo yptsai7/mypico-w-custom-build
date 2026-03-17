@@ -71,27 +71,29 @@ jobs:
           echo "=== 修改後 btstack_config.h ==="
           cat $BTSTACK_INC/btstack_config.h
 
-      - name: Patch mpbtstackport.c for Classic BT HID
+      - name: Patch mpbtstackport.c for polling
         run: |
           BTSTACKPORT=$GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c
 
-          python3 -c "f=open('$BTSTACKPORT','r');c=f.read();f.close();old='void mp_bluetooth_btstack_port_start(void) {\n    hci_power_control(HCI_POWER_ON);\n}';new='void mp_bluetooth_btstack_port_start(void) {\n    static int ds4_init_done = 0;\n    if (!ds4_init_done) {\n        extern void ds4_btstack_init(void);\n        ds4_btstack_init();\n        ds4_init_done = 1;\n    }\n    hci_power_control(HCI_POWER_ON);\n}';c=c.replace(old,new);f=open('$BTSTACKPORT','w');f.write(c);f.close();print('port_start patched')"
-
+          # 只加入持續 polling，不再呼叫 ds4_btstack_init
           LINE=$(grep -n "btstack_run_loop_base_poll_data_sources" $BTSTACKPORT | head -1 | cut -d: -f1)
           echo "Found poll_data_sources at line $LINE"
           sed -i "${LINE}a\\        mp_bluetooth_hci_poll_in_ms(10);" $BTSTACKPORT
 
-          echo "=== 確認 port_start patch ==="
-          grep -A12 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
-
           echo "=== 確認 hci_poll patch ==="
           grep -n "btstack_run_loop_base_poll_data_sources\|poll_in_ms(10)" $BTSTACKPORT
 
-      - name: Debug init sequence detail
+      - name: Patch modbluetooth_btstack.c for DS4
         run: |
-          echo "=== modbluetooth_btstack.c lines 615-645 ==="
-          sed -n '615,645p' \
-            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c
+          MODBT=$GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c
+
+          # 在 hci_add_event_handler 之後插入 ds4_btstack_init
+          LINE=$(grep -n "hci_add_event_handler(&hci_event_callback_registration)" $MODBT | head -1 | cut -d: -f1)
+          echo "Found hci_add_event_handler at line $LINE"
+          sed -i "${LINE}a\\    { extern void ds4_btstack_init(void); ds4_btstack_init(); }" $MODBT
+
+          echo "=== 確認 patch ==="
+          sed -n "$((LINE-1)),$((LINE+4))p" $MODBT
 
       - name: Inject DS4 Module from Local
         run: |
