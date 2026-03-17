@@ -80,6 +80,16 @@ jobs:
           echo "=== 確認 patch ==="
           grep -A6 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
 
+      - name: Debug port_start call site
+        run: |
+          echo "=== port_start 在哪裡被呼叫 ==="
+          grep -n "btstack_port_start\|btstack_port_init\|mp_bluetooth_btstack" \
+            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -30
+
+          echo "=== bt.active 對應的 C 函數 ==="
+          grep -n "mp_bluetooth_enable\|bluetooth_active\|port_start\|port_init" \
+            $GITHUB_WORKSPACE/micropython/extmod/modbluetooth.c | head -30
+
       - name: Inject DS4 Module from Local
         run: |
           mkdir -p $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext
