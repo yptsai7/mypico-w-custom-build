@@ -17,6 +17,7 @@ typedef struct {
     uint8_t hat;
     bool connected;
     bool initialized;
+    bool hid_ready;
 } ds4_state_t;
 
 static ds4_state_t ds4_state = {
@@ -24,7 +25,7 @@ static ds4_state_t ds4_state = {
     .rx = 0x80, .ry = 0x80,
     .buttons = 0, .l2 = 0, .r2 = 0,
     .hat = 0x8, .connected = false,
-    .initialized = false
+    .initialized = false, .hid_ready = false
 };
 
 // ======== BTstack 變數 ========
@@ -138,9 +139,21 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
     bd_addr_t addr;
     uint8_t status;
 
+    // HCI 就緒時初始化 HID Host 並開始掃描
     if (event == BTSTACK_EVENT_STATE) {
         if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
-            printf("[DS4] HCI working! Starting scan in 1s\n");
+            printf("[DS4] HCI working! Init HID host\n");
+
+            if (!ds4_state.hid_ready) {
+                hid_host_init(hid_descriptor_storage, sizeof(hid_descriptor_storage));
+                hid_host_register_packet_handler(packet_handler);
+                gap_set_default_link_policy_settings(
+                    LM_LINK_POLICY_ENABLE_SNIFF_MODE |
+                    LM_LINK_POLICY_ENABLE_ROLE_SWITCH);
+                hci_set_master_slave_policy(HCI_ROLE_MASTER);
+                ds4_state.hid_ready = true;
+            }
+
             if (!scan_timer_active) {
                 btstack_run_loop_set_timer(&scan_timer, 1000);
                 btstack_run_loop_set_timer_handler(&scan_timer, scan_timer_handler);
@@ -283,14 +296,7 @@ void ds4_btstack_init(void) {
     if (ds4_state.initialized) return;
     printf("[DS4] ds4_btstack_init called\n");
 
-    hid_host_init(hid_descriptor_storage, sizeof(hid_descriptor_storage));
-    hid_host_register_packet_handler(packet_handler);
-
-    gap_set_default_link_policy_settings(
-        LM_LINK_POLICY_ENABLE_SNIFF_MODE |
-        LM_LINK_POLICY_ENABLE_ROLE_SWITCH);
-    hci_set_master_slave_policy(HCI_ROLE_MASTER);
-
+    // 只註冊 event handler，hid_host_init 等 HCI_STATE_WORKING 再呼叫
     hci_event_cb.callback = &packet_handler;
     hci_add_event_handler(&hci_event_cb);
 
