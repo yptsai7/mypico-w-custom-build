@@ -16,7 +16,7 @@ typedef struct {
     uint8_t l2, r2;
     uint8_t hat;
     bool connected;
-    bool started;
+    bool initialized;
 } ds4_state_t;
 
 static ds4_state_t ds4_state = {
@@ -24,7 +24,7 @@ static ds4_state_t ds4_state = {
     .rx = 0x80, .ry = 0x80,
     .buttons = 0, .l2 = 0, .r2 = 0,
     .hat = 0x8, .connected = false,
-    .started = false
+    .initialized = false
 };
 
 // ======== BTstack 變數 ========
@@ -52,9 +52,7 @@ static bd_addr_t remote_addr;
 static bool mac_found = false;
 static bool scanning = false;
 
-enum SCAN_STATE { SCAN_INIT, SCAN_ACTIVE } scan_state = SCAN_INIT;
-
-// ======== btstack_timer for 掃描觸發 ========
+// ======== btstack_timer ========
 static btstack_timer_source_t scan_timer;
 static bool scan_timer_active = false;
 
@@ -92,7 +90,6 @@ static void start_scan(void) {
     deviceCount = 0;
     mac_found = false;
     scanning = true;
-    scan_state = SCAN_ACTIVE;
     gap_inquiry_start(INQUIRY_INTERVAL);
 }
 
@@ -124,11 +121,10 @@ static void continue_remote_names(void) {
     start_scan();
 }
 
-// ======== 定時器：HCI 就緒後延遲啟動掃描 ========
 static void scan_timer_handler(btstack_timer_source_t *ts) {
     UNUSED(ts);
-    printf("[DS4] Timer fired, starting scan\n");
     scan_timer_active = false;
+    printf("[DS4] Timer fired, starting scan\n");
     start_scan();
 }
 
@@ -142,10 +138,9 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
     bd_addr_t addr;
     uint8_t status;
 
-    // HCI 就緒時啟動掃描
     if (event == BTSTACK_EVENT_STATE) {
         if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
-            printf("[DS4] HCI working, will start scan in 1s\n");
+            printf("[DS4] HCI working! Starting scan in 1s\n");
             if (!scan_timer_active) {
                 btstack_run_loop_set_timer(&scan_timer, 1000);
                 btstack_run_loop_set_timer_handler(&scan_timer, scan_timer_handler);
@@ -156,7 +151,6 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
         return;
     }
 
-    // 掃描階段
     if (scanning && !mac_found) {
         if (event == GAP_EVENT_INQUIRY_RESULT) {
             if (deviceCount >= MAX_DEVICES) return;
@@ -182,23 +176,22 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
                     bd_addr_copy(remote_addr, addr);
                     mac_found = true;
                     scanning = false;
+                    printf("[DS4] Connecting to %s\n", bd_addr_to_str(remote_addr));
+                    status = hid_host_connect(remote_addr, hid_report_mode, &hid_host_cid);
+                    if (status != ERROR_CODE_SUCCESS)
+                        printf("[DS4] Connect failed: 0x%02x\n", status);
                 }
             } else {
                 devices[deviceCount].state = NAME_REQUEST;
             }
             deviceCount++;
 
-            if (mac_found) {
-                printf("[DS4] Connecting to %s\n", bd_addr_to_str(remote_addr));
-                status = hid_host_connect(remote_addr, hid_report_mode, &hid_host_cid);
-                if (status != ERROR_CODE_SUCCESS)
-                    printf("[DS4] Connect failed: 0x%02x\n", status);
-            }
         } else if (event == GAP_EVENT_INQUIRY_COMPLETE) {
             for (int i = 0; i < deviceCount; i++)
                 if (devices[i].state == NAME_INQUIRED)
                     devices[i].state = NAME_REQUEST;
             continue_remote_names();
+
         } else if (event == HCI_EVENT_REMOTE_NAME_REQUEST_COMPLETE) {
             reverse_bd_addr(&packet[3], addr);
             int idx = get_device_index(addr);
@@ -221,24 +214,24 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
         return;
     }
 
-    // 連線階段
     switch (event) {
     case HCI_EVENT_PIN_CODE_REQUEST:
         hci_event_pin_code_request_get_bd_addr(packet, addr);
         gap_pin_code_response(addr, "0000");
         break;
     case HCI_EVENT_DISCONNECTION_COMPLETE:
-        printf("[DS4] Disconnected, restarting scan\n");
+        printf("[DS4] Disconnected, restarting scan in 2s\n");
         ds4_state.connected = false;
         hid_host_cid = 0;
         hid_descriptor_available = false;
         mac_found = false;
         scanning = false;
-        // 延遲 2 秒後重新掃描
-        btstack_run_loop_set_timer(&scan_timer, 2000);
-        btstack_run_loop_set_timer_handler(&scan_timer, scan_timer_handler);
-        btstack_run_loop_add_timer(&scan_timer);
-        scan_timer_active = true;
+        if (!scan_timer_active) {
+            btstack_run_loop_set_timer(&scan_timer, 2000);
+            btstack_run_loop_set_timer_handler(&scan_timer, scan_timer_handler);
+            btstack_run_loop_add_timer(&scan_timer);
+            scan_timer_active = true;
+        }
         break;
     case HCI_EVENT_HID_META: {
         uint8_t hid_ev = hci_event_hid_meta_get_subevent_code(packet);
@@ -285,35 +278,29 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
     }
 }
 
+// ======== 由 mpbtstackport.c 呼叫的初始化函數 ========
+void ds4_btstack_init(void) {
+    if (ds4_state.initialized) return;
+    printf("[DS4] ds4_btstack_init called\n");
+
+    hid_host_init(hid_descriptor_storage, sizeof(hid_descriptor_storage));
+    hid_host_register_packet_handler(packet_handler);
+
+    gap_set_default_link_policy_settings(
+        LM_LINK_POLICY_ENABLE_SNIFF_MODE |
+        LM_LINK_POLICY_ENABLE_ROLE_SWITCH);
+    hci_set_master_slave_policy(HCI_ROLE_MASTER);
+
+    hci_event_cb.callback = &packet_handler;
+    hci_add_event_handler(&hci_event_cb);
+
+    ds4_state.initialized = true;
+    printf("[DS4] ds4_btstack_init done\n");
+}
+
 // ======== MicroPython API ========
-
-// ds4.start() - 註冊到現有 BTstack（不啟動新的 Core 1）
 static mp_obj_t ds4_start(void) {
-    if (!ds4_state.started) {
-        printf("[DS4] Registering on existing BTstack\n");
-
-        hid_host_init(hid_descriptor_storage, sizeof(hid_descriptor_storage));
-        hid_host_register_packet_handler(packet_handler);
-
-        gap_set_default_link_policy_settings(
-            LM_LINK_POLICY_ENABLE_SNIFF_MODE |
-            LM_LINK_POLICY_ENABLE_ROLE_SWITCH);
-        hci_set_master_slave_policy(HCI_ROLE_MASTER);
-
-        hci_event_cb.callback = &packet_handler;
-        hci_add_event_handler(&hci_event_cb);
-
-        ds4_state.started = true;
-        printf("[DS4] Registered, waiting for HCI_STATE_WORKING\n");
-
-        // 如果 HCI 已經在運行，直接啟動掃描
-        if (!scan_timer_active) {
-            btstack_run_loop_set_timer(&scan_timer, 500);
-            btstack_run_loop_set_timer_handler(&scan_timer, scan_timer_handler);
-            btstack_run_loop_add_timer(&scan_timer);
-            scan_timer_active = true;
-        }
-    }
+    printf("[DS4] ds4.start() called, initialized=%d\n", ds4_state.initialized);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(ds4_start_obj, ds4_start);
