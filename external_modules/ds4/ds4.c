@@ -88,14 +88,6 @@ static void handle_interrupt_report(const uint8_t *packet, uint16_t len) {
 }
 
 // ======== 掃描邏輯 ========
-static void start_scan(void) {
-    printf("[DS4] Starting inquiry scan...\n");
-    deviceCount = 0;
-    mac_found = false;
-    scanning = true;
-    gap_inquiry_start(INQUIRY_INTERVAL);
-}
-
 static int get_device_index(bd_addr_t addr) {
     for (int i = 0; i < deviceCount; i++)
         if (bd_addr_cmp(addr, devices[i].address) == 0) return i;
@@ -112,7 +104,6 @@ static void do_next_name_request(void) {
             return;
         }
     }
-    start_scan();
 }
 
 static void continue_remote_names(void) {
@@ -121,20 +112,40 @@ static void continue_remote_names(void) {
             do_next_name_request();
             return;
         }
-    start_scan();
+    // 重新掃描
+    ds4_debug_counter = 20;
+    uint8_t result = gap_inquiry_start(INQUIRY_INTERVAL);
+    printf("[DS4] gap_inquiry_start=%d\n", result);
+    ds4_debug_counter = 21 + result;
+    deviceCount = 0;
+    mac_found = false;
+    scanning = true;
 }
 
 static void scan_timer_handler(btstack_timer_source_t *ts) {
     UNUSED(ts);
     scan_timer_active = false;
-    printf("[DS4] Timer fired, starting scan\n");
-    start_scan();
+    ds4_debug_counter = 20;
+    printf("[DS4] Timer fired, calling gap_inquiry_start\n");
+    uint8_t result = gap_inquiry_start(INQUIRY_INTERVAL);
+    printf("[DS4] gap_inquiry_start result=%d\n", result);
+    ds4_debug_counter = 21 + result;
+    deviceCount = 0;
+    mac_found = false;
+    scanning = true;
 }
 
 // ======== 主封包處理 ========
 static void packet_handler(uint8_t ptype, uint16_t channel,
                            uint8_t *packet, uint16_t size) {
     UNUSED(channel); UNUSED(size);
+
+    // 記錄所有收到的事件
+    if (ptype == HCI_EVENT_PACKET) {
+        uint8_t event = hci_event_packet_get_type(packet);
+        printf("[DS4] event=0x%02x\n", event);
+    }
+
     if (ptype != HCI_EVENT_PACKET) return;
 
     uint8_t event = hci_event_packet_get_type(packet);
@@ -170,6 +181,7 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
 
     if (scanning && !mac_found) {
         if (event == GAP_EVENT_INQUIRY_RESULT) {
+            ds4_debug_counter = 30;
             if (deviceCount >= MAX_DEVICES) return;
             gap_event_inquiry_result_get_bd_addr(packet, addr);
             if (get_device_index(addr) >= 0) return;
@@ -204,6 +216,8 @@ static void packet_handler(uint8_t ptype, uint16_t channel,
             deviceCount++;
 
         } else if (event == GAP_EVENT_INQUIRY_COMPLETE) {
+            ds4_debug_counter = 31;
+            printf("[DS4] Inquiry complete\n");
             for (int i = 0; i < deviceCount; i++)
                 if (devices[i].state == NAME_INQUIRED)
                     devices[i].state = NAME_REQUEST;
