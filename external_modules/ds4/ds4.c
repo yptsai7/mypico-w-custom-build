@@ -108,7 +108,6 @@ static void continue_remote_names(void) {
             do_next_name_request();
             return;
         }
-    // 重新掃描
     ds4_debug_counter = 40;
     uint8_t result = gap_inquiry_start(INQUIRY_INTERVAL);
     printf("[DS4] re-scan gap_inquiry_start=%d\n", result);
@@ -321,8 +320,12 @@ static mp_obj_t ds4_connect(mp_obj_t mac_obj) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(ds4_connect_obj, ds4_connect);
 
-// ds4.poll() - Python 端定期呼叫，觸發掃描
+// ds4.poll() - 強制 poll BTstack 並觸發掃描
 static mp_obj_t ds4_poll(void) {
+    // 強制 poll BTstack HCI
+    extern void mp_bluetooth_hci_poll(void);
+    mp_bluetooth_hci_poll();
+
     if (ds4_state.hid_ready && !scanning && !mac_found && !ds4_state.connected) {
         ds4_debug_counter = 50;
         printf("[DS4] poll: starting scan\n");
