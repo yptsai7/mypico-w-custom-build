@@ -75,10 +75,27 @@ jobs:
         run: |
           BTSTACKPORT=$GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c
 
-          python3 -c "f=open('$BTSTACKPORT','r');c=f.read();f.close();old='void mp_bluetooth_btstack_port_start(void) {\n    hci_power_control(HCI_POWER_ON);\n}';new='void mp_bluetooth_btstack_port_start(void) {\n    static int ds4_init_done = 0;\n    if (!ds4_init_done) {\n        extern void ds4_btstack_init(void);\n        ds4_btstack_init();\n        ds4_init_done = 1;\n    }\n    hci_power_control(HCI_POWER_ON);\n}';c=c.replace(old,new);f=open('$BTSTACKPORT','w');f.write(c);f.close();print('Patched OK')"
+          python3 -c "f=open('$BTSTACKPORT','r');c=f.read();f.close();old='void mp_bluetooth_btstack_port_start(void) {\n    hci_power_control(HCI_POWER_ON);\n}';new='void mp_bluetooth_btstack_port_start(void) {\n    static int ds4_init_done = 0;\n    if (!ds4_init_done) {\n        extern void ds4_btstack_init(void);\n        ds4_btstack_init();\n        ds4_init_done = 1;\n    }\n    hci_power_control(HCI_POWER_ON);\n}';c=c.replace(old,new);f=open('$BTSTACKPORT','w');f.write(c);f.close();print('port_start patched')"
 
-          echo "=== 確認 patch ==="
-          grep -A10 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
+          LINE=$(grep -n "btstack_run_loop_base_poll_data_sources" $BTSTACKPORT | head -1 | cut -d: -f1)
+          echo "Found poll_data_sources at line $LINE"
+          sed -i "${LINE}a\\        mp_bluetooth_hci_poll_in_ms(10);" $BTSTACKPORT
+
+          echo "=== 確認 port_start patch ==="
+          grep -A12 "mp_bluetooth_btstack_port_start" $BTSTACKPORT
+
+          echo "=== 確認 hci_poll patch ==="
+          grep -n "btstack_run_loop_base_poll_data_sources\|poll_in_ms(10)" $BTSTACKPORT
+
+      - name: Debug BTstack init sequence
+        run: |
+          echo "=== modbluetooth_btstack.c l2cap sdp init ==="
+          grep -n "l2cap_init\|sdp_init\|hid_host_init\|gap_set_security" \
+            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -20
+
+          echo "=== mpbtstackport.c l2cap sdp ==="
+          grep -n "l2cap_init\|sdp_init\|hid_host\|gap_set" \
+            $GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c
 
       - name: Inject DS4 Module from Local
         run: |
