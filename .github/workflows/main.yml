@@ -79,18 +79,24 @@ jobs:
           echo "=== ds4_ext 目錄內容 ==="
           ls -l $GITHUB_WORKSPACE/micropython/ports/rp2/ds4_ext/
 
-      - name: Debug BTstack Init
+      - name: Debug MicroPython BTstack Core
         run: |
-          echo "=== modbluetooth_btstack.c BTstack init ==="
-          grep -n "mp_bluetooth_btstack_start\|cyw43_arch_init\|hci_power_control\|btstack_run_loop\|hid_host_init\|gap_inquiry" \
-            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -50
+          echo "=== mp_bluetooth_hci_init ==="
+          grep -n "mp_bluetooth_hci_init\|hci_power_control\|cyw43_arch\|btstack_run_loop_execute\|hid_host" \
+            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -60
 
-          echo "=== rp2 main.c bluetooth init ==="
-          grep -n "bluetooth\|btstack\|cyw43" \
-            $GITHUB_WORKSPACE/micropython/ports/rp2/main.c | head -30
+          echo "=== ports/rp2 btstack_inc files ==="
+          ls $GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc/
+          cat $GITHUB_WORKSPACE/micropython/ports/rp2/btstack_inc/btstack_config.h
 
-          echo "=== btstack_config_common.h ==="
-          cat $GITHUB_WORKSPACE/micropython/extmod/btstack/btstack_config_common.h
+          echo "=== mpbthciport.c ==="
+          cat $GITHUB_WORKSPACE/micropython/ports/rp2/mpbthciport.c 2>/dev/null || echo "not found"
+
+          echo "=== mpbtstackport.c ==="
+          cat $GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c 2>/dev/null || echo "not found"
+
+          echo "=== ls ports/rp2 bt files ==="
+          ls $GITHUB_WORKSPACE/micropython/ports/rp2/ | grep -i bt
 
       - name: Build mpy-cross
         run: |
