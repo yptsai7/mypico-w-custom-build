@@ -87,15 +87,11 @@ jobs:
           echo "=== 確認 hci_poll patch ==="
           grep -n "btstack_run_loop_base_poll_data_sources\|poll_in_ms(10)" $BTSTACKPORT
 
-      - name: Debug BTstack init sequence
+      - name: Debug init sequence detail
         run: |
-          echo "=== modbluetooth_btstack.c l2cap sdp init ==="
-          grep -n "l2cap_init\|sdp_init\|hid_host_init\|gap_set_security" \
-            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c | head -20
-
-          echo "=== mpbtstackport.c l2cap sdp ==="
-          grep -n "l2cap_init\|sdp_init\|hid_host\|gap_set" \
-            $GITHUB_WORKSPACE/micropython/ports/rp2/mpbtstackport.c
+          echo "=== modbluetooth_btstack.c lines 615-645 ==="
+          sed -n '615,645p' \
+            $GITHUB_WORKSPACE/micropython/extmod/btstack/modbluetooth_btstack.c
 
       - name: Inject DS4 Module from Local
         run: |
